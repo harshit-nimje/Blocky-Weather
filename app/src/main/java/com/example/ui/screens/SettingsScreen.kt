@@ -42,6 +42,7 @@ import com.example.data.local.AutoRefreshInterval
 import com.example.data.local.RefreshRateMode
 import com.example.data.local.UserSettings
 import com.example.ui.components.BlockyEnterReveal
+import com.example.ui.components.BlockyIntervalSliderCard
 import com.example.ui.components.BlockyMetricIcon
 import com.example.ui.components.BlockyRadioOptionCard
 import com.example.ui.components.BlockySmallIcon
@@ -64,6 +65,7 @@ fun SettingsScreen(
   onSetDarkMode: (Boolean) -> Unit,
   onSetDynamicTheme: (Boolean) -> Unit,
   onSetUseSolarDayNightTheme: (Boolean) -> Unit = {},
+  onSetUseStandardHeroFont: (Boolean) -> Unit = {},
   onSetUseFahrenheit: (Boolean) -> Unit,
   onSetShowHeroNudges: (Boolean) -> Unit,
   onSetRefreshRateMode: (RefreshRateMode) -> Unit,
@@ -151,17 +153,31 @@ fun SettingsScreen(
 
             BlockyToggleSettingCard(
               title = "AUTO DAY / NIGHT THEME",
-              subtitle = "Light mode during daytime · Dark mode at night",
+              subtitle = "Light mode in daytime · Dark mode at night",
               checked = settings.useSolarDayNightTheme,
-              onCheckedChange = onSetUseSolarDayNightTheme,
+              onCheckedChange = { enabled ->
+                if (enabled) {
+                  onSetUseSolarDayNightTheme(true)
+                  onSetDarkMode(false)
+                } else {
+                  onSetUseSolarDayNightTheme(false)
+                }
+              },
               switchTestTag = "settings_solar_day_night_switch",
             )
 
             BlockyToggleSettingCard(
-              title = stringResource(R.string.settings_dark_mode_title),
-              subtitle = stringResource(R.string.settings_dark_mode_desc),
-              checked = settings.isDarkMode,
-              onCheckedChange = onSetDarkMode,
+              title = "DARK MODE",
+              subtitle = "Force AMOLED dark theme always",
+              checked = settings.isDarkMode && !settings.useSolarDayNightTheme,
+              onCheckedChange = { enabled ->
+                if (enabled) {
+                  onSetDarkMode(true)
+                  onSetUseSolarDayNightTheme(false)
+                } else {
+                  onSetDarkMode(false)
+                }
+              },
               switchTestTag = "settings_dark_mode_switch",
             )
 
@@ -205,26 +221,24 @@ fun SettingsScreen(
               onCheckedChange = onSetShowHeroNudges,
               switchTestTag = "settings_nudges_switch",
             )
+
+            BlockyToggleSettingCard(
+              title = "HERO TEMP FONT STYLE",
+              subtitle = if (settings.useStandardHeroFont) "Standard bold typography font" else "Signature blocky pixel matrix digits",
+              checked = settings.useStandardHeroFont,
+              onCheckedChange = onSetUseStandardHeroFont,
+              switchTestTag = "settings_standard_hero_font_switch",
+            )
           }
         }
 
         // Section 3: Automatic Background Telemetry Sync
         BlockyEnterReveal(index = 2) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingsSectionLabel(title = "AUTOMATIC TELEMETRY REFRESH")
-
-            AutoRefreshInterval.entries.forEach { interval ->
-              BlockyRadioOptionCard(
-                title = "AUTO REFRESH: ${interval.label}",
-                subtitle =
-                  if (interval == AutoRefreshInterval.OFF) "Manual pull-down & sync actions only"
-                  else "Periodically fetch live weather telemetry every ${interval.label.lowercase()}",
-                badgeText = interval.label,
-                selected = settings.autoRefreshInterval == interval,
-                onClick = { onSetAutoRefreshInterval(interval) },
-                modifier = Modifier.testTag("auto_refresh_${interval.name}"),
-              )
-            }
+            BlockyIntervalSliderCard(
+              selectedInterval = settings.autoRefreshInterval,
+              onIntervalChanged = onSetAutoRefreshInterval,
+            )
           }
         }
 

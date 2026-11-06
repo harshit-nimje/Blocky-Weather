@@ -258,6 +258,10 @@ class WeatherViewModel(
     viewModelScope.launch { preferencesRepository.setUseSolarDayNightTheme(enabled) }
   }
 
+  fun setUseStandardHeroFont(enabled: Boolean) {
+    viewModelScope.launch { preferencesRepository.setUseStandardHeroFont(enabled) }
+  }
+
   fun setUseFahrenheit(enabled: Boolean) {
     viewModelScope.launch { preferencesRepository.setUseFahrenheit(enabled) }
   }

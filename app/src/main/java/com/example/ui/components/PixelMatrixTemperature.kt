@@ -59,6 +59,7 @@ fun PixelMatrixTemperature(
   todayLowC: Double,
   unitSymbol: String,
   ecoMode: Boolean,
+  useStandardHeroFont: Boolean = false,
   onHeroTapped: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -220,18 +221,32 @@ fun PixelMatrixTemperature(
 
       Spacer(modifier = Modifier.width(railToDigitsGap))
 
-      // Huge Standalone Bold Pixelated Temperature Number + Less-Wide Yellow-Side Degree
+      // Huge Standalone Bold Temperature Number (Blocky Matrix vs Standard Bold Font)
       Box(
-        modifier = Modifier.width(matrixWidthDp).fillMaxHeight(),
+        modifier = Modifier.weight(1f).fillMaxHeight(),
         contentAlignment = Alignment.CenterStart,
       ) {
-        Canvas(modifier = Modifier.width(matrixWidthDp).height(matrixHeightDp)) {
-          val pitchX = size.width / totalCols
-          val pitchY = size.height / totalRows
-          val seam = 1.35.dp.toPx()
+        if (useStandardHeroFont) {
+          Text(
+            text = tempText,
+            style =
+              MaterialTheme.typography.displayLarge.copy(
+                fontSize = 58.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-1.5).sp,
+              ),
+            color = tokens.inkPrimary,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 4.dp),
+          )
+        } else {
+          Canvas(modifier = Modifier.width(matrixWidthDp).height(matrixHeightDp)) {
+            val pitchX = size.width / totalCols
+            val pitchY = size.height / totalRows
+            val seam = 1.35.dp.toPx()
 
-          val isFidgetActive = tapBoostTicks > 0 || (fidgetStep % 11 == 2)
-          val swatches = tokens.blockSwatches
+            val isFidgetActive = tapBoostTicks > 0 || (fidgetStep % 11 == 2)
+            val swatches = tokens.blockSwatches
           val sweep = sweepProgress.value
 
           var colCursor = 0
@@ -291,6 +306,7 @@ fun PixelMatrixTemperature(
               }
             }
             colCursor += gCols + 1
+          }
           }
         }
       }

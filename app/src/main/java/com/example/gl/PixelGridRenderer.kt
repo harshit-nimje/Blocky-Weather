@@ -120,6 +120,7 @@ class PixelGridRenderer(
   private val pendingBurstScratch = ArrayList<TouchGridBurst>(24)
   private var burstSeq = 0
   private var lastProcessedFidget = 0
+  private var lastProcessedSyncCascade = 0
   private var lastFrameNanos = 0L
   private var smoothedDt = 0.016f
   private var elapsedSec = 0f
@@ -991,6 +992,25 @@ class PixelGridRenderer(
         tAgeSec[slot] = 0f
         tDurationSec[slot] = 0.90f + (k % 2) * 0.15f
         tSwatch[slot] = (fidget + k) % 5
+      }
+    }
+
+    val syncCascade = controller.getSyncCascadeCount()
+    if (syncCascade != lastProcessedSyncCascade) {
+      lastProcessedSyncCascade = syncCascade
+      val cols = totalCols.toInt().coerceAtLeast(6)
+      val topRow = (totalRows.toFloat() - 1f).coerceAtLeast(0f)
+      for (c in 0 until cols) {
+        if (c % 2 == 0 || c % 3 == 0) {
+          val slot = allocateFreeTouchSlot()
+          tStartCol[slot] = c.toFloat()
+          tStartRow[slot] = topRow
+          tDirX[slot] = 0f
+          tDirY[slot] = -1f
+          tAgeSec[slot] = -(c % 5) * 0.05f
+          tDurationSec[slot] = 1.10f + (c % 4) * 0.12f
+          tSwatch[slot] = (syncCascade + c) % 5
+        }
       }
     }
   }

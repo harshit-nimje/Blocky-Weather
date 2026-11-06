@@ -212,6 +212,15 @@ class PixelGridController {
     }
   }
 
+  private val syncCascadeCounter = AtomicInteger(0)
+
+  fun triggerSyncSuccessCascade() {
+    syncCascadeCounter.incrementAndGet()
+    if (ecoModeRef.get()) {
+      onRenderRequested?.invoke()
+    }
+  }
+
   fun getCondition(): WeatherConditionType = conditionRef.get()
 
   fun isDarkMode(): Boolean = darkModeRef.get()
@@ -225,4 +234,6 @@ class PixelGridController {
   fun getTouchImpulseCount(): Int = touchImpulseCounter.get()
 
   fun getFidgetCount(): Int = fidgetCounter.get()
+
+  fun getSyncCascadeCount(): Int = syncCascadeCounter.get()
 }

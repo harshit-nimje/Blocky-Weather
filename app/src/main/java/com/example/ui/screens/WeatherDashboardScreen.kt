@@ -271,6 +271,7 @@ fun WeatherDashboardScreen(
                     useFahrenheit = useFahrenheit,
                     ecoMode = ecoMode,
                     showHeroNudges = showHeroNudges,
+                    useStandardHeroFont = uiState.settings.useStandardHeroFont,
                     hasActiveSevereAlert = uiState.activeSevereAlert != null,
                     onlineFunFact = uiState.onlineFunFact,
                     quipCycleOffset = uiState.quipCycleOffset,
@@ -339,6 +340,7 @@ fun WeatherDashboardScreen(
                   useFahrenheit = useFahrenheit,
                   ecoMode = ecoMode,
                   showHeroNudges = showHeroNudges,
+                  useStandardHeroFont = uiState.settings.useStandardHeroFont,
                   hasActiveSevereAlert = uiState.activeSevereAlert != null,
                   onlineFunFact = uiState.onlineFunFact,
                   quipCycleOffset = uiState.quipCycleOffset,
@@ -614,6 +616,7 @@ private fun HeroArchitecturalSection(
   useFahrenheit: Boolean,
   ecoMode: Boolean,
   showHeroNudges: Boolean,
+  useStandardHeroFont: Boolean = false,
   hasActiveSevereAlert: Boolean = false,
   onlineFunFact: String?,
   quipCycleOffset: Int,
@@ -709,6 +712,7 @@ private fun HeroArchitecturalSection(
         todayLowC = todayLowC,
         unitSymbol = unitLabel,
         ecoMode = ecoMode,
+        useStandardHeroFont = useStandardHeroFont,
         onHeroTapped = onHeroTapped,
       )
     }

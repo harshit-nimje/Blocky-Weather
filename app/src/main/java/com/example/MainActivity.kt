@@ -286,7 +286,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
         uiState = uiState,
         onOpenSettings = { viewModel.openSettings() },
         onRefresh = {
-          gridController.triggerPlayfulFidget()
+          gridController.triggerSyncSuccessCascade()
           viewModel.refreshCurrentStation()
         },
         onOpenStationSheet = { viewModel.openStationSheet() },
@@ -319,6 +319,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           onSetDarkMode = { viewModel.setDarkMode(it) },
           onSetDynamicTheme = { viewModel.setDynamicTheme(it) },
           onSetUseSolarDayNightTheme = { viewModel.setUseSolarDayNightTheme(it) },
+          onSetUseStandardHeroFont = { viewModel.setUseStandardHeroFont(it) },
           onSetUseFahrenheit = { viewModel.setUseFahrenheit(it) },
           onSetShowHeroNudges = { viewModel.setShowHeroNudges(it) },
           onSetRefreshRateMode = { mode ->
@@ -330,7 +331,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           onSetSevereAlertOverlayEnabled = { viewModel.setSevereAlertOverlayEnabled(it) },
           onOpenStations = { viewModel.openStationSheet() },
           onRefreshWeather = {
-            gridController.triggerPlayfulFidget()
+            gridController.triggerSyncSuccessCascade()
             viewModel.refreshCurrentStation()
           },
           onClose = { viewModel.closeSettings() },
