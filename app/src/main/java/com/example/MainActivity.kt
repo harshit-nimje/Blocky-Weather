@@ -277,6 +277,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
     activeIsDay,
     effectiveDarkMode,
     effectiveEcoMode,
+    uiState.settings.reduceAnimations,
   ) {
     gridController.updateWeatherState(
       condition = activeCondition,
@@ -286,6 +287,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
       precipProbPercent = activePrecipProb,
       windSpeedKmh = activeWindKmh,
       isDay = activeIsDay,
+      reduceAnimations = uiState.settings.reduceAnimations,
     )
   }
 
@@ -395,6 +397,8 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           onSetDynamicTheme = { viewModel.setDynamicTheme(it) },
           onSetUseSolarDayNightTheme = { viewModel.setUseSolarDayNightTheme(it) },
           onSetUseStandardHeroFont = { viewModel.setUseStandardHeroFont(it) },
+          onSetReduceAnimations = { viewModel.setReduceAnimations(it) },
+          onSetAppLanguage = { viewModel.setAppLanguage(it) },
           onSetUseFahrenheit = { viewModel.setUseFahrenheit(it) },
           onSetShowHeroNudges = { viewModel.setShowHeroNudges(it) },
           onSetRefreshRateMode = { mode ->

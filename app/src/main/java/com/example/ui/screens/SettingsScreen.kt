@@ -82,6 +82,8 @@ fun SettingsScreen(
   onSetDynamicTheme: (Boolean) -> Unit,
   onSetUseSolarDayNightTheme: (Boolean) -> Unit = {},
   onSetUseStandardHeroFont: (Boolean) -> Unit = {},
+  onSetReduceAnimations: (Boolean) -> Unit = {},
+  onSetAppLanguage: (String) -> Unit = {},
   onSetUseFahrenheit: (Boolean) -> Unit,
   onSetShowHeroNudges: (Boolean) -> Unit,
   onSetRefreshRateMode: (RefreshRateMode) -> Unit,
@@ -260,13 +262,75 @@ fun SettingsScreen(
               onCheckedChange = onSetDynamicTheme,
               switchTestTag = "settings_dynamic_theme_switch",
             )
+
+            BlockyToggleSettingCard(
+              title = "REDUCE ANIMATIONS (PLAIN GRID)",
+              subtitle = "Disables background particle effects, weather rain & motion; retains clean graph paper grid",
+              checked = settings.reduceAnimations,
+              onCheckedChange = onSetReduceAnimations,
+              switchTestTag = "settings_reduce_animations_switch",
+            )
           }
         }
 
-        // Section 2: Telemetry & Hero Nudges
+        // Section 2: Telemetry & Language
         BlockyEnterReveal(index = 1) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingsSectionLabel(title = stringResource(R.string.settings_section_telemetry))
+            SettingsSectionLabel(title = "LANGUAGE & TELEMETRY")
+
+            // Language Selector Card
+            val activeLang = com.example.util.AppLanguage.fromCode(settings.appLanguage)
+            Column(
+              modifier =
+                Modifier.fillMaxWidth()
+                  .background(tokens.surfaceElevated)
+                  .border(1.dp, tokens.gridBorder)
+                  .padding(12.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              Text(
+                text = "APP LANGUAGE",
+                style =
+                  MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = SilkscreenFontFamily,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                  ),
+                color = tokens.inkPrimary,
+              )
+              Text(
+                text = "Smartly adapts to device language, or pick manual locale",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = tokens.inkSecondary,
+              )
+
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                com.example.util.AppLanguage.entries.forEach { lang ->
+                  val isSelected = activeLang == lang
+                  PixelBlockContainer(
+                    isHighlighted = isSelected,
+                    fillOverride = if (isSelected) tokens.accentSoftFill else tokens.surfaceTranslucent,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    onClick = { onSetAppLanguage(lang.code) },
+                  ) {
+                    Text(
+                      text = lang.code,
+                      style =
+                        MaterialTheme.typography.labelSmall.copy(
+                          fontFamily = SilkscreenFontFamily,
+                          fontSize = 10.sp,
+                          fontWeight = FontWeight.Bold,
+                        ),
+                      color = if (isSelected) tokens.accentPrimary else tokens.inkPrimary,
+                    )
+                  }
+                }
+              }
+            }
 
             BlockyToggleSettingCard(
               title =

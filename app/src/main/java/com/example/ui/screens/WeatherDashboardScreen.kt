@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
+import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -177,12 +180,14 @@ fun WeatherDashboardScreen(
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       // Minimalist Top Clean-Room Header Bar (Location Selector + Settings Page Button)
-      BlockyEnterReveal(index = 0) {
+      BlockyEnterReveal(index = 0, reduceAnimations = uiState.settings.reduceAnimations) {
         CleanRoomTopBar(
           cityName = forecast?.cityName ?: "BLOCKY WEATHER",
           isOffline = uiState.isOffline,
           fetchedAtMillis = forecast?.fetchedAtMillis,
           isSyncing = uiState.isSyncing,
+          forecast = forecast,
+          useFahrenheit = useFahrenheit,
           onOpenStations = onOpenStationSheet,
           onOpenSettings = onOpenSettings,
           modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
@@ -424,11 +429,14 @@ private fun CleanRoomTopBar(
   isOffline: Boolean,
   fetchedAtMillis: Long?,
   isSyncing: Boolean,
+  forecast: WeatherForecast?,
+  useFahrenheit: Boolean,
   onOpenStations: () -> Unit,
   onOpenSettings: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val tokens = LocalGridcastTokens.current
+  val context = LocalContext.current
   val settingsDesc = stringResource(R.string.cd_open_settings)
 
   Row(
@@ -483,6 +491,45 @@ private fun CleanRoomTopBar(
           contentDescription = stringResource(R.string.cd_location_selector),
           tint = tokens.inkSecondary,
           modifier = Modifier.size(18.dp),
+        )
+      }
+    }
+
+    // Share Weather Telemetry button
+    if (forecast != null) {
+      PixelBlockContainer(
+        modifier = Modifier.testTag("share_weather_button"),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 11.dp),
+        onClick = {
+          val tempStr = "${forecast.currentTempC.toDisplayTemp(useFahrenheit)}°"
+          val feelsStr = "${forecast.apparentTempC.toDisplayTemp(useFahrenheit)}°"
+          val todayHighStr = "${forecast.daily.firstOrNull()?.tempMaxC?.toDisplayTemp(useFahrenheit) ?: "--"}°"
+          val todayLowStr = "${forecast.daily.firstOrNull()?.tempMinC?.toDisplayTemp(useFahrenheit) ?: "--"}°"
+          val quip = WeatherQuipEngine.selectActiveQuip(forecast)
+          val text = "BLOCKY WEATHER · ${forecast.cityName.uppercase(Locale.US)}\n" +
+              "Temp: $tempStr (Feels $feelsStr) · High: $todayHighStr / Low: $todayLowStr\n" +
+              "Condition: ${forecast.conditionLabel} · Wind: ${forecast.windSpeedKmh.roundToInt()} km/h\n" +
+              "AQI: ${forecast.usAqi ?: "--"} · UV: ${forecast.uvIndex}\n" +
+              "\"$quip\""
+
+          val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+          val clip = android.content.ClipData.newPlainText("Blocky Weather", text)
+          clipboard?.setPrimaryClip(clip)
+
+          val sendIntent = android.content.Intent().apply {
+            action = android.content.Intent.ACTION_SEND
+            putExtra(android.content.Intent.EXTRA_TEXT, text)
+            type = "text/plain"
+          }
+          val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Weather Telemetry")
+          context.startActivity(shareIntent)
+        },
+      ) {
+        Text(
+          text = "SHARE ↗",
+          style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.Bold,
+          color = tokens.accentPrimary,
         )
       }
     }

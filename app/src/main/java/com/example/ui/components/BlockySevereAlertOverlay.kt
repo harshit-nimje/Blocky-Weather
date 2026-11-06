@@ -175,6 +175,47 @@ fun BlockySevereAlertOverlay(
             )
           }
 
+          // Emergency Safety Action Checklist
+          val safetyTips = getEmergencySafetyChecklist(alert)
+          if (safetyTips.isNotEmpty()) {
+            Column(
+              modifier =
+                Modifier.fillMaxWidth()
+                  .background(tokens.surfaceTranslucent)
+                  .border(1.dp, alertColor.copy(alpha = 0.35f))
+                  .padding(8.dp),
+              verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+              Text(
+                text = "🛡 ACTIONABLE SAFETY CHECKLIST",
+                style =
+                  MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = SilkscreenFontFamily,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                  ),
+                color = alertColor,
+              )
+              safetyTips.forEach { tip ->
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                  Box(
+                    modifier =
+                      Modifier.size(6.dp)
+                        .background(alertColor)
+                  )
+                  Text(
+                    text = tip,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = tokens.inkPrimary,
+                  )
+                }
+              }
+            }
+          }
+
           Spacer(modifier = Modifier.height(2.dp))
 
           // Action Row: Inspect Related Matrix Card & Dismiss Button
@@ -222,5 +263,48 @@ fun BlockySevereAlertOverlay(
         }
       }
     }
+  }
+}
+
+internal fun getEmergencySafetyChecklist(alert: SevereWeatherAlert): List<String> {
+  val titleUpper = alert.title.uppercase()
+  val descUpper = alert.description.uppercase()
+  return when {
+    "WIND" in titleUpper || "GALE" in titleUpper || "WIND" in descUpper ->
+      listOf(
+        "Secure outdoor items, furniture & patio gear",
+        "Avoid standing near tall trees or powerlines",
+        "Maintain firm grip on steering wheel under crosswinds",
+      )
+    "UV" in titleUpper || "RADIATION" in titleUpper || "HEAT" in titleUpper ->
+      listOf(
+        "Apply broad-spectrum >SPF 50 sunscreen liberally",
+        "Stay hydrated with cold water & electrolyte drinks",
+        "Seek shade and avoid direct midday sun exposure",
+      )
+    "AIR" in titleUpper || "AQI" in titleUpper || "POLLUTION" in titleUpper || "SMOG" in titleUpper ->
+      listOf(
+        "Wear a well-fitted N95 mask outdoors",
+        "Run indoor HEPA air purifier on medium-high",
+        "Keep windows sealed and avoid outdoor exercise",
+      )
+    "STORM" in titleUpper || "LIGHTNING" in titleUpper || "THUNDER" in titleUpper ->
+      listOf(
+        "Stay indoors away from glass windows and doors",
+        "Unplug sensitive high-voltage electronics",
+        "Avoid open fields, hilltops, and metal fences",
+      )
+    "SNOW" in titleUpper || "ICE" in titleUpper || "FREEZE" in titleUpper ->
+      listOf(
+        "Watch for hidden black ice on stairs & walkways",
+        "Keep thermal layers, gloves & emergency torch ready",
+        "Increase vehicle braking distance significantly",
+      )
+    else ->
+      listOf(
+        "Monitor live telemetry updates regularly",
+        "Follow local civil protection authority guidance",
+        "Keep phone charged and emergency numbers saved",
+      )
   }
 }

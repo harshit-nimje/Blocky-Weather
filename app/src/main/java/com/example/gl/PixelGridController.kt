@@ -25,6 +25,7 @@ class PixelGridController {
   private val darkModeRef = AtomicBoolean(false)
   private val ecoModeRef = AtomicBoolean(false)
   private val isDayRef = AtomicBoolean(true)
+  private val reduceAnimationsRef = AtomicBoolean(false)
 
   @Volatile var precipitationMm: Double = 0.0
     private set
@@ -104,10 +105,12 @@ class PixelGridController {
     precipProbPercent: Int = 0,
     windSpeedKmh: Double = 0.0,
     isDay: Boolean = true,
+    reduceAnimations: Boolean = false,
   ) {
     conditionRef.set(condition)
     darkModeRef.set(isDarkMode)
     ecoModeRef.set(ecoMode)
+    reduceAnimationsRef.set(reduceAnimations)
     this.precipitationMm = precipitationMm
     this.precipProbPercent = precipProbPercent
     this.windSpeedKmh = windSpeedKmh
@@ -236,6 +239,8 @@ class PixelGridController {
   fun isEcoMode(): Boolean = ecoModeRef.get()
 
   fun isDay(): Boolean = isDayRef.get()
+
+  fun isReduceAnimations(): Boolean = reduceAnimationsRef.get()
 
   fun getTick(): Int = tickCounter.get()
 

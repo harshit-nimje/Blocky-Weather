@@ -299,6 +299,14 @@ class WeatherViewModel(
     viewModelScope.launch { preferencesRepository.setUseStandardHeroFont(enabled) }
   }
 
+  fun setReduceAnimations(enabled: Boolean) {
+    viewModelScope.launch { preferencesRepository.setReduceAnimations(enabled) }
+  }
+
+  fun setAppLanguage(languageCode: String) {
+    viewModelScope.launch { preferencesRepository.setAppLanguage(languageCode) }
+  }
+
   fun setUseFahrenheit(enabled: Boolean) {
     viewModelScope.launch { preferencesRepository.setUseFahrenheit(enabled) }
   }

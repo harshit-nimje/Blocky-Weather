@@ -76,6 +76,8 @@ data class UserSettings(
   val useDynamicTheme: Boolean = true,
   val useSolarDayNightTheme: Boolean = false,
   val useStandardHeroFont: Boolean = false,
+  val reduceAnimations: Boolean = false,
+  val appLanguage: String = "SYSTEM",
   val refreshRateMode: RefreshRateMode = RefreshRateMode.DEFAULT,
   val activeStationId: String = "station_san_francisco",
   val autoRefreshInterval: AutoRefreshInterval = AutoRefreshInterval.MIN_30,
@@ -85,7 +87,7 @@ data class UserSettings(
   val atmosphericCardOrder: List<String> = DEFAULT_ATMOSPHERIC_CARD_ORDER,
 ) {
   val ecoGridMode: Boolean
-    get() = refreshRateMode == RefreshRateMode.BATTERY_SAVER
+    get() = refreshRateMode == RefreshRateMode.BATTERY_SAVER || reduceAnimations
 }
 
 class UserPreferencesRepository(private val context: Context) {
@@ -96,6 +98,8 @@ class UserPreferencesRepository(private val context: Context) {
     val USE_DYNAMIC_THEME = booleanPreferencesKey("use_dynamic_theme")
     val USE_SOLAR_DAY_NIGHT_THEME = booleanPreferencesKey("use_solar_day_night_theme")
     val USE_STANDARD_HERO_FONT = booleanPreferencesKey("use_standard_hero_font")
+    val REDUCE_ANIMATIONS = booleanPreferencesKey("reduce_animations")
+    val APP_LANGUAGE = stringPreferencesKey("app_language")
     val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
     val ECO_GRID_MODE = booleanPreferencesKey("eco_grid_mode")
     val ACTIVE_STATION_ID = stringPreferencesKey("active_station_id")
@@ -134,6 +138,8 @@ class UserPreferencesRepository(private val context: Context) {
         useDynamicTheme = prefs[Keys.USE_DYNAMIC_THEME] ?: true,
         useSolarDayNightTheme = prefs[Keys.USE_SOLAR_DAY_NIGHT_THEME] ?: false,
         useStandardHeroFont = prefs[Keys.USE_STANDARD_HERO_FONT] ?: false,
+        reduceAnimations = prefs[Keys.REDUCE_ANIMATIONS] ?: false,
+        appLanguage = prefs[Keys.APP_LANGUAGE] ?: "SYSTEM",
         refreshRateMode = resolvedHzMode,
         activeStationId = prefs[Keys.ACTIVE_STATION_ID] ?: "station_san_francisco",
         autoRefreshInterval = AutoRefreshInterval.fromMinutes(prefs[Keys.AUTO_REFRESH_MINUTES]),
@@ -166,6 +172,14 @@ class UserPreferencesRepository(private val context: Context) {
 
   suspend fun setUseStandardHeroFont(enabled: Boolean) {
     context.gridcastDataStore.edit { it[Keys.USE_STANDARD_HERO_FONT] = enabled }
+  }
+
+  suspend fun setReduceAnimations(enabled: Boolean) {
+    context.gridcastDataStore.edit { it[Keys.REDUCE_ANIMATIONS] = enabled }
+  }
+
+  suspend fun setAppLanguage(languageCode: String) {
+    context.gridcastDataStore.edit { it[Keys.APP_LANGUAGE] = languageCode }
   }
 
   suspend fun setRefreshRateMode(mode: RefreshRateMode) {

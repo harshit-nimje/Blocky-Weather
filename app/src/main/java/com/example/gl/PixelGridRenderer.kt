@@ -237,6 +237,12 @@ class PixelGridRenderer(
     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
     GLES20.glDisableVertexAttribArray(gAttrPos)
 
+    if (controller.isReduceAnimations()) {
+      pendingBurstScratch.clear()
+      controller.drainTouchBursts(pendingBurstScratch)
+      return
+    }
+
     // Update touch-excited blocks using monotonic smoothed delta & precipitation drops
     updateTouchExcitedBlocks(smoothedDt)
 

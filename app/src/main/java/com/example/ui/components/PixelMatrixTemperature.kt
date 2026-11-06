@@ -66,6 +66,7 @@ fun PixelMatrixTemperature(
   unitSymbol: String,
   ecoMode: Boolean,
   useStandardHeroFont: Boolean = false,
+  reduceAnimations: Boolean = false,
   onHeroTapped: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -74,25 +75,31 @@ fun PixelMatrixTemperature(
 
   // Clean blocky column-sweep enter/update transition
   val sweepProgress = remember { Animatable(0f) }
-  LaunchedEffect(temperature, unitSymbol) {
-    sweepProgress.snapTo(0.15f)
-    sweepProgress.animateTo(
-      targetValue = 1f,
-      animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
-    )
+  LaunchedEffect(temperature, unitSymbol, reduceAnimations) {
+    if (reduceAnimations) {
+      sweepProgress.snapTo(1f)
+    } else {
+      sweepProgress.snapTo(0.15f)
+      sweepProgress.animateTo(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+      )
+    }
   }
 
   // Calm discrete fidget tick (fidgets briefly every few seconds or immediately on tap)
   var fidgetStep by remember { mutableIntStateOf(0) }
   var tapBoostTicks by remember { mutableIntStateOf(0) }
 
-  LaunchedEffect(ecoMode) {
-    while (true) {
-      delay(if (ecoMode) 900L else 480L)
-      if (tapBoostTicks > 0) {
-        tapBoostTicks--
+  LaunchedEffect(ecoMode, reduceAnimations) {
+    if (!reduceAnimations) {
+      while (true) {
+        delay(if (ecoMode) 900L else 480L)
+        if (tapBoostTicks > 0) {
+          tapBoostTicks--
+        }
+        fidgetStep++
       }
-      fidgetStep++
     }
   }
 

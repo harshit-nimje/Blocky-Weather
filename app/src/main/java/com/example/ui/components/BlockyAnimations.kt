@@ -31,8 +31,16 @@ private val BlockyArchitecturalEasing = CubicBezierEasing(0.16f, 0.92f, 0.24f, 1
 fun BlockyEnterReveal(
   index: Int,
   modifier: Modifier = Modifier,
+  reduceAnimations: Boolean = false,
   content: @Composable () -> Unit,
 ) {
+  if (reduceAnimations) {
+    Box(modifier = modifier) {
+      content()
+    }
+    return
+  }
+
   val progress = remember { Animatable(0f) }
 
   LaunchedEffect(Unit) {
@@ -74,6 +82,7 @@ fun BlockyWordStaggerText(
   modifier: Modifier = Modifier,
   baseDelayMs: Long = 80L,
   perWordStaggerMs: Long = 38L,
+  reduceAnimations: Boolean = false,
 ) {
   val words = remember(text) { text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() } }
 
@@ -84,29 +93,37 @@ fun BlockyWordStaggerText(
       verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
       words.forEachIndexed { idx, word ->
-        val wordProgress = remember(idx) { Animatable(0f) }
-        LaunchedEffect(idx) {
-          val waitMs = baseDelayMs + idx * perWordStaggerMs
-          if (waitMs > 0L) delay(waitMs)
-          wordProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 220, easing = BlockyArchitecturalEasing),
+        if (reduceAnimations) {
+          Text(
+            text = word,
+            style = style,
+            color = color,
+          )
+        } else {
+          val wordProgress = remember(idx) { Animatable(0f) }
+          LaunchedEffect(idx) {
+            val waitMs = baseDelayMs + idx * perWordStaggerMs
+            if (waitMs > 0L) delay(waitMs)
+            wordProgress.animateTo(
+              targetValue = 1f,
+              animationSpec = tween(durationMillis = 220, easing = BlockyArchitecturalEasing),
+            )
+          }
+          val wp = wordProgress.value
+          val stepSnap = (floor(wp * 5f) / 5f) * 0.42f + wp * 0.58f
+
+          Text(
+            text = word,
+            style = style,
+            color = color,
+            modifier =
+              Modifier.graphicsLayer {
+                alpha = wp
+                translationY = (1f - stepSnap) * 16f
+                translationX = (1f - stepSnap) * 6f
+              },
           )
         }
-        val wp = wordProgress.value
-        val stepSnap = (floor(wp * 5f) / 5f) * 0.42f + wp * 0.58f
-
-        Text(
-          text = word,
-          style = style,
-          color = color,
-          modifier =
-            Modifier.graphicsLayer {
-              alpha = wp
-              translationY = (1f - stepSnap) * 16f
-              translationX = (1f - stepSnap) * 6f
-            },
-        )
       }
     }
   }

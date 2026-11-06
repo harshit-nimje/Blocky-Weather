@@ -635,4 +635,66 @@ class ExampleUnitTest {
     controller.triggerPostSyncWave()
     assertEquals(1, controller.getPostSyncWaveCount())
   }
+
+  @Test
+  fun pixelGridController_reduceAnimationsFlag_isUpdatedAndRetained() {
+    val controller = PixelGridController()
+    assertTrue(!controller.isReduceAnimations())
+
+    controller.updateWeatherState(
+      condition = WeatherConditionType.CLEAR_DAY,
+      isDarkMode = false,
+      ecoMode = false,
+      reduceAnimations = true,
+    )
+    assertTrue(controller.isReduceAnimations())
+  }
+
+  @Test
+  fun appLanguageLocalization_resolvesAutoDeviceAndSupportedLocales() {
+    assertEquals(com.example.util.AppLanguage.SYSTEM, com.example.util.AppLanguage.fromCode("SYSTEM"))
+    assertEquals(com.example.util.AppLanguage.SPANISH, com.example.util.AppLanguage.fromCode("ES"))
+    assertEquals(com.example.util.AppLanguage.JAPANESE, com.example.util.AppLanguage.fromCode("JA"))
+
+    assertEquals(
+      "MATRIZ ATMOSFÉRICA",
+      com.example.util.LocalizedStrings.sectionAtmosphericMatrix(com.example.util.AppLanguage.SPANISH),
+    )
+    assertEquals(
+      "SENSACIÓN REAL",
+      com.example.util.LocalizedStrings.metricRealFeel(com.example.util.AppLanguage.SPANISH),
+    )
+    assertEquals(
+      "雨",
+      com.example.util.LocalizedStrings.conditionLabel("RAIN", com.example.util.AppLanguage.JAPANESE),
+    )
+  }
+
+  @Test
+  fun emergencySafetyChecklist_generatesActionableTipsPerHazard() {
+    val galeAlert =
+      com.example.domain.model.SevereWeatherAlert(
+        id = "alert_wind",
+        title = "GALE WIND WARNING",
+        description = "High wind gusts reaching 75 km/h",
+        category = "WIND",
+        metricTag = "metric_wind",
+        severity = com.example.domain.model.AlertSeverity.WARNING,
+      )
+    val tips = com.example.ui.components.getEmergencySafetyChecklist(galeAlert)
+    assertEquals(3, tips.size)
+    assertTrue(tips.any { "outdoor items" in it.lowercase() })
+
+    val uvAlert =
+      com.example.domain.model.SevereWeatherAlert(
+        id = "alert_uv",
+        title = "EXTREME UV RADIATION",
+        description = "UV index 11+",
+        category = "UV",
+        metricTag = "metric_uv",
+        severity = com.example.domain.model.AlertSeverity.CRITICAL,
+      )
+    val uvTips = com.example.ui.components.getEmergencySafetyChecklist(uvAlert)
+    assertTrue(uvTips.any { "sunscreen" in it.lowercase() })
+  }
 }
