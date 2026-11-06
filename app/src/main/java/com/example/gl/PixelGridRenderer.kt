@@ -249,13 +249,18 @@ class PixelGridRenderer(
       b: Float,
       alpha: Float,
       scale: Float = 1f,
+      scaleX: Float = 1f,
+      scaleY: Float = 1f,
+      shearX: Float = 0f,
+      jitterX: Float = 0f,
+      jitterY: Float = 0f,
     ) {
-      if (blockCount >= MAX_BLOCKS || alpha <= 0.01f || scale <= 0.02f) return
+      if (blockCount >= MAX_BLOCKS || alpha <= 0.01f || (scale <= 0.02f && scaleX <= 0.02f && scaleY <= 0.02f)) return
       if (
-        col + spanCols <= -1f ||
-          col >= totalCols + 1f ||
-          row + spanRows <= -1f ||
-          row >= totalRows + 1f
+        col + spanCols <= -1.5f ||
+          col >= totalCols + 1.5f ||
+          row + spanRows <= -1.5f ||
+          row >= totalRows + 1.5f
       ) {
         return
       }
@@ -266,26 +271,32 @@ class PixelGridRenderer(
       val rawX1 = (col + spanCols) * cellSizePx - inset
       val rawY1 = (row + spanRows) * cellSizePx - inset
 
-      val cx = (rawX0 + rawX1) * 0.5f
-      val cy = (rawY0 + rawY1) * 0.5f
-      val halfW = (rawX1 - rawX0) * 0.5f * scale
-      val halfH = (rawY1 - rawY0) * 0.5f * scale
+      val cx = (rawX0 + rawX1) * 0.5f + jitterX
+      val cy = (rawY0 + rawY1) * 0.5f + jitterY
+      val halfW = (rawX1 - rawX0) * 0.5f * scale * scaleX
+      val halfH = (rawY1 - rawY0) * 0.5f * scale * scaleY
 
-      val x0 = cx - halfW
+      val shearOffsetTopX = shearX * halfH
+      val shearOffsetBottomX = -shearX * halfH
+
+      val x0Top = cx - halfW + shearOffsetTopX
+      val x1Top = cx + halfW + shearOffsetTopX
+      val x0Bot = cx - halfW + shearOffsetBottomX
+      val x1Bot = cx + halfW + shearOffsetBottomX
+
       val y0 = cy - halfH
-      val x1 = cx + halfW
       val y1 = cy + halfH
 
-      vertexArray[ptr++] = x0; vertexArray[ptr++] = y0
+      vertexArray[ptr++] = x0Top; vertexArray[ptr++] = y0
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
-      vertexArray[ptr++] = x1; vertexArray[ptr++] = y0
+      vertexArray[ptr++] = x1Top; vertexArray[ptr++] = y0
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
-      vertexArray[ptr++] = x0; vertexArray[ptr++] = y1
+      vertexArray[ptr++] = x0Bot; vertexArray[ptr++] = y1
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
-      vertexArray[ptr++] = x1; vertexArray[ptr++] = y1
+      vertexArray[ptr++] = x1Bot; vertexArray[ptr++] = y1
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
       blockCount++
@@ -299,6 +310,11 @@ class PixelGridRenderer(
       swatchIdx: Int,
       alpha: Float = 0.92f,
       scale: Float = 1f,
+      scaleX: Float = 1f,
+      scaleY: Float = 1f,
+      shearX: Float = 0f,
+      jitterX: Float = 0f,
+      jitterY: Float = 0f,
     ) {
       val idx = abs(swatchIdx) % swatches.size
       if (idx == 0 && controller.hasThemeAccent) {
@@ -308,10 +324,16 @@ class PixelGridRenderer(
         val adjR = if (isDark) tr * 0.56f else 0.980f * 0.35f + tr * 0.65f
         val adjG = if (isDark) tg * 0.56f else 0.976f * 0.35f + tg * 0.65f
         val adjB = if (isDark) tb * 0.56f else 0.961f * 0.35f + tb * 0.65f
-        emitRawBlock(col, row, spanCols, spanRows, adjR, adjG, adjB, alpha, scale)
+        emitRawBlock(
+          col, row, spanCols, spanRows, adjR, adjG, adjB, alpha,
+          scale, scaleX, scaleY, shearX, jitterX, jitterY,
+        )
       } else {
         val c = swatches[idx]
-        emitRawBlock(col, row, spanCols, spanRows, c[0], c[1], c[2], alpha, scale)
+        emitRawBlock(
+          col, row, spanCols, spanRows, c[0], c[1], c[2], alpha,
+          scale, scaleX, scaleY, shearX, jitterX, jitterY,
+        )
       }
     }
 
@@ -574,7 +596,69 @@ class PixelGridRenderer(
       }
     }
 
-    // 1. Calm scattered architectural anchor blocks on gridlines
+    // Compute Weather-Reactive Physical Deformation Factors:
+    val windKmh = controller.windSpeedKmh.toFloat()
+    val directionSign = if (smoothedTiltSlope >= 0f) 1f else -1f
+    val activeWindShear = (windKmh / 36f).coerceIn(0f, 0.82f) * directionSign
+
+    val isRaining = isPrecipitationBackdrop && condition != WeatherConditionType.SNOW
+    val baseSquishX = if (isRaining) 1f + 0.26f * sin(elapsedSec * 9.2f) else 1f
+    val baseSquishY = if (isRaining) 1f - 0.22f * sin(elapsedSec * 9.2f) else 1f
+
+    val glitchX = if (lightningBoost > 0f) (sin(elapsedSec * 64f) * 10f * lightningBoost) else 0f
+    val glitchY = if (lightningBoost > 0f) (cos(elapsedSec * 52f) * 10f * lightningBoost) else 0f
+
+    // LAYER C: Wind Gust Micro-Particle Streaks when Wind >= 22 km/h
+    if (windKmh >= 22f) {
+      val gustCount = (windKmh / 12f).roundToInt().coerceIn(3, 10)
+      val gustR = if (isDark) 0.35f else 0.22f
+      val gustG = if (isDark) 0.72f else 0.58f
+      val gustB = if (isDark) 0.95f else 0.88f
+      for (gIdx in 0 until gustCount) {
+        val gustSpeed = (windKmh / 18f) * (0.8f + (gIdx % 3) * 0.25f)
+        val rawCol = (elapsedSec * gustSpeed * directionSign + gIdx * 4.2f) % (totalCols + 4f)
+        val wrappedCol = if (directionSign >= 0f) rawCol - 2f else (totalCols + 2f) - rawCol
+        val row = ((gIdx * 7 + 3) % (totalRows - 4) + 2).toFloat()
+        val streakAlpha = (0.35f + 0.45f * sin(elapsedSec * 3f + gIdx)).coerceIn(0.18f, 0.75f)
+        emitRawBlock(
+          col = wrappedCol,
+          row = row,
+          spanCols = 2.4f,
+          spanRows = 0.22f,
+          r = gustR,
+          g = gustG,
+          b = gustB,
+          alpha = streakAlpha,
+          shearX = activeWindShear * 0.85f,
+        )
+      }
+    }
+
+    // LAYER D: Drifting Fog / Mist Block Bands when FOG & MIST
+    if (condition == WeatherConditionType.FOG) {
+      val mistBands = 5
+      val fogR = if (isDark) 0.38f else 0.88f
+      val fogG = if (isDark) 0.42f else 0.90f
+      val fogB = if (isDark) 0.48f else 0.94f
+      for (mIdx in 0 until mistBands) {
+        val mistRow = ((mIdx * 6 + 2) % (totalRows - 3)).toFloat()
+        val driftCol = (sin(elapsedSec * 0.4f + mIdx) * 3f + (totalCols * 0.35f))
+        val mistAlpha = 0.14f + 0.32f * sin(elapsedSec * 1.2f + mIdx * 1.1f)
+        emitRawBlock(
+          col = driftCol,
+          row = mistRow,
+          spanCols = 4.8f,
+          spanRows = 0.90f,
+          r = fogR,
+          g = fogG,
+          b = fogB,
+          alpha = mistAlpha,
+          scaleY = 0.78f,
+        )
+      }
+    }
+
+    // 1. Calm scattered architectural anchor blocks on gridlines with weather-condition deformation
     val glideA = pingPongStepGlide(elapsedSec * 0.36f)
     val glideB = pingPongStepGlide(elapsedSec * 0.27f + 1.4f)
 
@@ -585,16 +669,22 @@ class PixelGridRenderer(
       spanCols = 2f,
       spanRows = 1f,
       swatchIdx = weatherSwatch,
+      scaleX = baseSquishX,
+      scaleY = baseSquishY,
+      shearX = activeWindShear,
+      jitterX = glitchX,
+      jitterY = glitchY,
     )
 
     if (!isSunnyBackdrop && !isPrecipitationBackdrop) {
-      // Upper-right 1x1 block (glides smoothly 1 square down and back)
+      // Upper-right 1x1 block
       emitSwatchBlock(
         col = (totalCols - 2).toFloat(),
         row = (totalRows - 3).toFloat() - glideA,
         spanCols = 1f,
         spanRows = 1f,
         swatchIdx = (weatherSwatch + 1) % 5,
+        shearX = activeWindShear,
       )
       // Mid-right 2x2 architectural square block
       emitSwatchBlock(
@@ -603,6 +693,7 @@ class PixelGridRenderer(
         spanCols = 2f,
         spanRows = 2f,
         swatchIdx = 1,
+        shearX = activeWindShear,
       )
       // Mid-left solitary 1x1 block
       emitSwatchBlock(
@@ -611,6 +702,7 @@ class PixelGridRenderer(
         spanCols = 1f,
         spanRows = 1f,
         swatchIdx = 2,
+        shearX = activeWindShear,
       )
       // Lower-center solitary 1x1 block
       emitSwatchBlock(
@@ -619,6 +711,7 @@ class PixelGridRenderer(
         spanCols = 1f,
         spanRows = 1f,
         swatchIdx = 0,
+        shearX = activeWindShear,
       )
       // Lower-right solitary 1x1 block
       emitSwatchBlock(
@@ -627,6 +720,7 @@ class PixelGridRenderer(
         spanCols = 1f,
         spanRows = 1f,
         swatchIdx = 4,
+        shearX = activeWindShear,
       )
       // Lower-left solitary 1x1 block
       emitSwatchBlock(
@@ -635,6 +729,7 @@ class PixelGridRenderer(
         spanCols = 1f,
         spanRows = 1f,
         swatchIdx = 3,
+        shearX = activeWindShear,
       )
 
       // 2. Fluid 60-FPS randomly flickering ambient grid cells across the graph paper
@@ -666,6 +761,7 @@ class PixelGridRenderer(
             swatchIdx = (cycleIdx + f + weatherSwatch) % 5,
             alpha = env * (if (isDark) 0.72f else 0.62f),
             scale = 0.55f + 0.45f * env,
+            shearX = activeWindShear * 0.5f,
           )
         }
       }
@@ -678,6 +774,11 @@ class PixelGridRenderer(
         spanRows = 1f,
         swatchIdx = weatherSwatch,
         alpha = 0.58f,
+        scaleX = baseSquishX,
+        scaleY = baseSquishY,
+        shearX = activeWindShear,
+        jitterX = glitchX,
+        jitterY = glitchY,
       )
       emitSwatchBlock(
         col = 1f,
@@ -686,6 +787,11 @@ class PixelGridRenderer(
         spanRows = 1f,
         swatchIdx = (weatherSwatch + 2) % 5,
         alpha = 0.52f,
+        scaleX = baseSquishX,
+        scaleY = baseSquishY,
+        shearX = activeWindShear,
+        jitterX = glitchX,
+        jitterY = glitchY,
       )
     }
 
@@ -719,6 +825,11 @@ class PixelGridRenderer(
           swatchIdx = tSwatch[idx],
           alpha = envelope * 0.96f,
           scale = 0.65f + 0.35f * popIn,
+          scaleX = baseSquishX,
+          scaleY = baseSquishY,
+          shearX = activeWindShear * 0.7f,
+          jitterX = glitchX,
+          jitterY = glitchY,
         )
       }
     }
