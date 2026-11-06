@@ -1,0 +1,6 @@
+{
+  "name": "Blocky Weather",
+  "description": "Clean-room pixelated architectural weather app with OpenGL ES reactive grid blocks, bold matrix typography, dark mode, and offline Room caching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
