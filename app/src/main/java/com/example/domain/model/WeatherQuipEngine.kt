@@ -124,23 +124,32 @@ object WeatherQuipEngine {
       contextual.add("*coughs intensely* help me...")
       contextual.add("Honey, where is my mask?")
       contextual.add("Lungs are gonna complain today.")
+      contextual.add("air quality: extra crunchy today.")
     }
     if ((usAqi != null && usAqi >= 70) || (humidity >= 70 && tempC >= 22.0)) {
       contextual.add("Bit stuffy here.")
     }
     if ((effectiveApparentC >= 36.0 && (tempC >= 31.0 || dewPointC >= 22.0)) || tempC >= 38.0) {
       contextual.add("Basically a nuclear fusion outside. stay in.")
+      contextual.add("the sun is on a personal vengeance arc today.")
+      contextual.add("drink water before you turn into a raisin bro.")
     }
     if (isDay && uvIndex >= 5.0) {
       contextual.add("use high quality >SPF 50 sunscreen, dont save money there!")
+      contextual.add("sunscreen now or tomato cosplay later, your call.")
       if (uvIndex >= 6.0 && cloudCover <= 65) {
         contextual.add("skin burn alert!")
+        contextual.add("uv is crazy rn, vampires are trembling.")
       }
     }
 
     // 2. Clear Starry Night & Clean Air
     if (!isDay && cloudCover <= 30 && visibilityM >= 8000.0 && (usAqi == null || usAqi <= 60)) {
       contextual.add("Look up, the stars are pretty")
+      contextual.add("the moon is carrying the entire sky aesthetic tonight.")
+      if (tempC >= 12.0) {
+        contextual.add("midnight snack run weather is immaculate.")
+      }
     }
     if ((usAqi == null || usAqi <= 45) && cloudCover <= 40) {
       contextual.add("Breathe in. Breathe out")
@@ -152,13 +161,18 @@ object WeatherQuipEngine {
     }
     if (isDay && tempC >= 28.5 && cloudCover <= 50 && precipMm == 0.0) {
       contextual.add("Dont go out barefeet today.")
+      contextual.add("car seatbelt buckle temperatures: critical.")
+      contextual.add("even the shadows are looking for shade rn.")
     }
     if (tempC >= 29.5 || effectiveApparentC >= 33.5) {
       contextual.add("Cooked.")
+      contextual.add("stepped outside for 2 seconds, character development complete.")
     }
     // Foolproof psychrometric sweat check: high humidity at 14°C is cool mist, NOT sweating buckets
     if (tempC >= 25.5 && (dewPointC >= 19.0 || (humidity >= 68 && effectiveApparentC >= 28.0))) {
       contextual.add("sweating buckets huh?")
+      contextual.add("air is 90% soup today.")
+      contextual.add("hair volume just doubled for free, you are welcome.")
     }
     if (
       (isAfternoon && tempC >= 26.5 && (dewPointC >= 17.5 || humidity >= 58)) ||
@@ -180,10 +194,15 @@ object WeatherQuipEngine {
     if (tempC in 8.0..19.5 && humidity >= 78 && precipMm <= 0.1) {
       if (condition == WeatherConditionType.FOG || visibilityM <= 4000.0) {
         contextual.add("Can barely see two blocks ahead. Fog claimed the whole grid.")
+        contextual.add("render distance set to 2 chunks.")
       } else {
         contextual.add("Chilly and damp at ${tempC.roundToInt()}°—hoodie air, zero sweat.")
       }
+    } else if (condition == WeatherConditionType.FOG || visibilityM <= 3000.0) {
+      contextual.add("render distance set to 2 chunks.")
+      contextual.add("bro turn up brightness, life is in low visibility mode.")
     }
+
     if (tempC <= 16.0 || isRainingNow || humidity >= 70) {
       contextual.add("A cup of tea wont hurt nobody.")
       contextual.add("wrapped up in blankies.")
@@ -192,24 +211,41 @@ object WeatherQuipEngine {
     // 5. Rainy / Stormy / Heavy Rain / Thunderstorm
     if (isRainingNow || upcomingPrecipPeak >= 45) {
       contextual.add("carry umbrellas, you are welcome")
+      contextual.add("did you check the weather before wearing white shoes? brave.")
       when (condition) {
         WeatherConditionType.HEAVY_RAIN -> {
           contextual.add("Better not get splashed today. Its raining... Cats and dogs?")
           contextual.add("rain gonna fill up to your ankles today.")
           contextual.add("Harvest some rain water dude.")
+          contextual.add("socks are in grave danger today.")
+          contextual.add("sky forgot to turn the tap off.")
         }
         WeatherConditionType.THUNDERSTORM -> {
           contextual.add("*Thunder Crackles*")
-          contextual.add("Electric sky out there. Let the pixel thunder roll from indoors.")
+          contextual.add("sky is taking flash photography without permission.")
+          contextual.add("thor is aggressively practicing drums overhead.")
         }
-        WeatherConditionType.DRIZZLE ->
+        WeatherConditionType.DRIZZLE -> {
           contextual.add("Light drizzle. Just wet enough to ruin clean sneakers.")
+          contextual.add("free car wash outside rn.")
+        }
         else -> {
           contextual.add("Better not get splashed today. Grab an umbrella.")
+          contextual.add("free car wash outside rn.")
           if (precipMm >= 2.0 || upcomingPrecipPeak >= 70) {
             contextual.add("Harvest some rain water dude.")
+            contextual.add("socks are in grave danger today.")
           }
         }
+      }
+    }
+
+    // 5b. Windy / Gusty Conditions
+    if (windKmh >= 22.0 || forecast.windGustsKmh >= 36.0) {
+      contextual.add("walking against the wind = surprise leg day.")
+      contextual.add("nature's free blow-dry. messy hair unlocked.")
+      if (windKmh >= 35.0 || forecast.windGustsKmh >= 50.0) {
+        contextual.add("umbrella flip hazard: 100%. dont even try it.")
       }
     }
 
@@ -219,14 +255,17 @@ object WeatherQuipEngine {
         contextual.add(
           "Freezing start, warm afternoon—classic ${forecast.cityName} ${todaySwingC.roundToInt()}° swing. Layer up."
         )
+        contextual.add("3 seasons in one day. pack a hoodie just in case.")
       } else if (next6hTempDeltaC <= -5.5) {
         contextual.add(
           "Enjoy the warmth now—${forecast.cityName} drops ${abs(next6hTempDeltaC.roundToInt())}° fast after sundown."
         )
+        contextual.add("3 seasons in one day. pack a hoodie just in case.")
       } else if (todaySwingC >= 12.0) {
         contextual.add(
           "${forecast.cityName} woke up at ${todayMinC.roundToInt()}° and hits ${todayMaxC.roundToInt()}° today. Respect the range."
         )
+        contextual.add("3 seasons in one day. pack a hoodie just in case.")
       }
     } else if (forecast.daily.size >= 3 && locationTypicalSwingC in 0.5..5.5 && !isRainingNow) {
       contextual.add(
@@ -278,6 +317,8 @@ object WeatherQuipEngine {
     ) {
       contextual.add("pleasantest weather.")
       contextual.add("Earth, as intended")
+      contextual.add("no jacket, no sweat, no complaints. rare W.")
+      contextual.add("weather so good it feels suspicious.")
       if (isDay && condition == WeatherConditionType.CLEAR_DAY) {
         contextual.add("Bit sunny today. Nice weather ngl.")
       } else {
@@ -288,10 +329,12 @@ object WeatherQuipEngine {
     // 10. Cold Weather
     if (tempC <= 12.0 && !isRainingNow) {
       contextual.add("brrrrr, so coldddd.")
-      if (tempC <= 1.0) {
-        contextual.add("Biting cold out there. Breath looks like pixel smoke.")
+      if (tempC <= 2.0) {
+        contextual.add("leaving the bed today requires heroic bravery.")
+        contextual.add("my ears have left the chat.")
       } else {
-        contextual.add("Crisp ${tempC.roundToInt()}° hoodie weather. Keep hands in pockets.")
+        contextual.add("certified hoodie thief weather.")
+        contextual.add("cold enough to pretend your breath is dragon smoke.")
       }
     }
 
@@ -324,6 +367,8 @@ object WeatherQuipEngine {
         result.add("Are you opening this app to read what i wrote? awww <3")
       } else if (idx == 2) {
         result.add("Hello :)")
+      } else if (idx == 3) {
+        result.add("tapping the quote for another one? i got plenty :p")
       }
     }
     if (funFactLine !in result) result.add(funFactLine)

@@ -1,7 +1,15 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,13 +38,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import com.example.R
 import com.example.data.local.AutoRefreshInterval
 import com.example.data.local.RefreshRateMode
@@ -62,6 +76,8 @@ data class DisplayRefreshCapabilities(
 fun SettingsScreen(
   settings: UserSettings,
   displayCaps: DisplayRefreshCapabilities,
+  hasNotificationPermission: Boolean = true,
+  onNotificationPermissionResult: (Boolean) -> Unit = {},
   onSetDarkMode: (Boolean) -> Unit,
   onSetDynamicTheme: (Boolean) -> Unit,
   onSetUseSolarDayNightTheme: (Boolean) -> Unit = {},
@@ -79,7 +95,58 @@ fun SettingsScreen(
   BackHandler(enabled = true) { onClose() }
 
   val tokens = LocalGridcastTokens.current
+  val context = LocalContext.current
+  val activity = context as? Activity
   val supportsMaterialYou = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+  val requiresRuntimeNotifPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+  val effectiveNotifGranted = !requiresRuntimeNotifPermission || hasNotificationPermission
+
+  var wasNotifRationaleBeforeLaunch by remember { mutableStateOf(false) }
+  var showNotifSettingsFallback by remember { mutableStateOf(false) }
+  var pendingNotifToggleTarget by remember { mutableStateOf<String?>(null) }
+
+  val notifPermissionLauncher =
+    rememberLauncherForActivityResult(
+      contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+      onNotificationPermissionResult(granted)
+      if (granted) {
+        showNotifSettingsFallback = false
+        if (pendingNotifToggleTarget == "severe") {
+          onSetSevereAlertOverlayEnabled(true)
+        } else {
+          onSetPinnedNotificationEnabled(true)
+        }
+      } else {
+        val nowRationale =
+          Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            activity != null &&
+            ActivityCompat.shouldShowRequestPermissionRationale(
+              activity,
+              Manifest.permission.POST_NOTIFICATIONS,
+            )
+        if (!nowRationale) {
+          showNotifSettingsFallback = true
+        }
+        if (!wasNotifRationaleBeforeLaunch && !nowRationale) {
+          openNotificationSettings(context)
+        }
+      }
+      pendingNotifToggleTarget = null
+    }
+
+  fun requestNotificationPermission(target: String) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+      pendingNotifToggleTarget = target
+      wasNotifRationaleBeforeLaunch =
+        activity != null &&
+          ActivityCompat.shouldShowRequestPermissionRationale(
+            activity,
+            Manifest.permission.POST_NOTIFICATIONS,
+          )
+      notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+  }
 
   Box(
     modifier =
@@ -223,7 +290,7 @@ fun SettingsScreen(
             )
 
             BlockyToggleSettingCard(
-              title = "HERO TEMP FONT STYLE",
+              title = "MAIN TEMPERATURE FONT",
               subtitle = if (settings.useStandardHeroFont) "Standard bold typography font" else "Signature blocky pixel matrix digits",
               checked = settings.useStandardHeroFont,
               onCheckedChange = onSetUseStandardHeroFont,
@@ -247,21 +314,94 @@ fun SettingsScreen(
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsSectionLabel(title = "NOTIFICATIONS & MATRIX ALERTS")
 
+            val effectivePinnedChecked = settings.pinnedNotificationEnabled && effectiveNotifGranted
             BlockyToggleSettingCard(
               title = "PINNED STATUS BAR NOTIFICATION",
-              subtitle = "Display persistent live temperature & quip on device status bar",
-              checked = settings.pinnedNotificationEnabled,
-              onCheckedChange = onSetPinnedNotificationEnabled,
+              subtitle =
+                if (!effectiveNotifGranted) {
+                  "Permission required — tap switch to allow persistent status bar card"
+                } else {
+                  "Display persistent live temperature & quip on device status bar"
+                },
+              checked = effectivePinnedChecked,
+              onCheckedChange = { enabled ->
+                if (enabled) {
+                  onSetPinnedNotificationEnabled(true)
+                  if (!effectiveNotifGranted) {
+                    requestNotificationPermission("pinned")
+                  }
+                } else {
+                  onSetPinnedNotificationEnabled(false)
+                }
+              },
               switchTestTag = "settings_pinned_notif_switch",
             )
 
             BlockyToggleSettingCard(
               title = "SEVERE WEATHER MATRIX OVERLAY",
-              subtitle = "Show emergency high-contrast overlay on gale wind, UV, pollution & severe storms",
+              subtitle = "Show emergency high-contrast overlay & alerts on gale wind, UV, pollution & storms",
               checked = settings.severeAlertOverlayEnabled,
-              onCheckedChange = onSetSevereAlertOverlayEnabled,
+              onCheckedChange = { enabled ->
+                onSetSevereAlertOverlayEnabled(enabled)
+                if (enabled && !effectiveNotifGranted) {
+                  requestNotificationPermission("severe")
+                }
+              },
               switchTestTag = "settings_severe_overlay_switch",
             )
+
+            if (!effectiveNotifGranted && (settings.pinnedNotificationEnabled || showNotifSettingsFallback)) {
+              PixelBlockContainer(
+                modifier = Modifier.fillMaxWidth(),
+                isHighlighted = true,
+                fillOverride = tokens.accentSoftFill,
+                contentPadding = PaddingValues(12.dp),
+              ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Text(
+                    text = "NOTIFICATION PERMISSION BLOCKED OR NOT GRANTED YET",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = tokens.inkPrimary,
+                  )
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  ) {
+                    PixelBlockContainer(
+                      modifier =
+                        Modifier.weight(1f)
+                          .minimumInteractiveComponentSize()
+                          .testTag("settings_grant_notif_permission_button"),
+                      isHighlighted = true,
+                      fillOverride = tokens.surfaceElevated,
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                      onClick = { requestNotificationPermission("pinned") },
+                    ) {
+                      Text(
+                        text = "ALLOW PERMISSION",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.accentPrimary,
+                      )
+                    }
+                    PixelBlockContainer(
+                      modifier =
+                        Modifier.weight(1f)
+                          .minimumInteractiveComponentSize()
+                          .testTag("settings_open_notif_settings_button"),
+                      fillOverride = tokens.surfaceElevated,
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                      onClick = { openNotificationSettings(context) },
+                    ) {
+                      Text(
+                        text = "APP SETTINGS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.inkPrimary,
+                      )
+                    }
+                  }
+                }
+              }
+            }
           }
         }
 
@@ -402,4 +542,19 @@ private fun SettingsSectionLabel(title: String) {
       color = tokens.inkPrimary,
     )
   }
+}
+
+private fun openNotificationSettings(context: Context) {
+  val intent =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+      }
+    } else {
+      Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", context.packageName, null)
+      }
+    }
+  intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+  runCatching { context.startActivity(intent) }
 }

@@ -1,5 +1,12 @@
 package com.example
 
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import com.example.data.local.DEFAULT_ATMOSPHERIC_CARD_ORDER
+import com.example.data.local.normalizeAtmosphericCardOrder
+import com.example.data.local.reorderAtmosphericCardsOnHover
 import com.example.data.remote.NetworkClient
 import com.example.data.remote.OpenMeteoAirQualityResponse
 import com.example.data.remote.OpenMeteoForecastResponse
@@ -11,6 +18,10 @@ import com.example.domain.model.WeatherQuipEngine
 import com.example.domain.model.toCompassCardinal
 import com.example.domain.model.toDisplayTemp
 import com.example.gl.PixelGridController
+import com.example.ui.components.accessibleStatusTextInk
+import com.example.ui.components.snapSliderOffsetToStep
+import com.example.ui.theme.enforceDynamicTokenContrast
+import com.example.ui.theme.wcagContrastRatio
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -480,5 +491,148 @@ class ExampleUnitTest {
       NetworkClient.moshi.adapter(OpenMeteoAirQualityResponse::class.java).fromJson(aqJson)
     assertNotNull(aqParsed)
     assertEquals(154, aqParsed!!.current!!.usAqi)
+
+    // 9. New smart contextual nudges
+    val thunderForecast = buildTestForecast(condition = WeatherConditionType.THUNDERSTORM, precipMm = 8.0)
+    val thunderPool = WeatherQuipEngine.buildQuipPool(thunderForecast)
+    assertTrue("sky is taking flash photography without permission." in thunderPool)
+    assertTrue("thor is aggressively practicing drums overhead." in thunderPool)
+
+    val foggyForecast = buildTestForecast(condition = WeatherConditionType.FOG, tempC = 15.0)
+    assertTrue(
+      "render distance set to 2 chunks." in WeatherQuipEngine.buildQuipPool(foggyForecast)
+    )
+    assertTrue(
+      "sunscreen now or tomato cosplay later, your call." in WeatherQuipEngine.buildQuipPool(highUv)
+    )
+    assertTrue(
+      "drink water before you turn into a raisin bro." in WeatherQuipEngine.buildQuipPool(nuclearHeat)
+    )
+
+    val windyForecast = buildTestForecast(windSpeedKmh = 40.0)
+    assertTrue(
+      "umbrella flip hazard: 100%. dont even try it." in WeatherQuipEngine.buildQuipPool(windyForecast)
+    )
+  }
+
+  @Test
+  fun discreteSliderSnapping_snapsStrictlyToNearestStep() {
+    assertEquals(0, snapSliderOffsetToStep(offsetX = -20f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+    assertEquals(0, snapSliderOffsetToStep(offsetX = 40f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+    assertEquals(1, snapSliderOffsetToStep(offsetX = 110f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+    assertEquals(2, snapSliderOffsetToStep(offsetX = 210f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+    assertEquals(3, snapSliderOffsetToStep(offsetX = 310f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+    assertEquals(4, snapSliderOffsetToStep(offsetX = 405f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+    assertEquals(4, snapSliderOffsetToStep(offsetX = 500f, totalWidthPx = 420f, thumbSizePx = 20f, totalSteps = 5))
+  }
+
+  @Test
+  fun atmosphericCardOrderNormalization_preservesCustomOrderAndDeduplicates() {
+    val custom = listOf("metric_solar", "metric_aqi", "metric_solar", "unknown_tag")
+    val normalized = normalizeAtmosphericCardOrder(custom)
+    assertEquals(DEFAULT_ATMOSPHERIC_CARD_ORDER.size, normalized.size)
+    assertEquals("metric_solar", normalized[0])
+    assertEquals("metric_aqi", normalized[1])
+    assertTrue(DEFAULT_ATMOSPHERIC_CARD_ORDER.all { it in normalized })
+
+    // Verify neighboring cards shift smoothly to make space when dragging forward or backward
+    val movedForward =
+      reorderAtmosphericCardsOnHover(
+        currentTags = DEFAULT_ATMOSPHERIC_CARD_ORDER,
+        movingTag = "metric_real_feel",
+        targetIndex = 3,
+      )
+    assertEquals(
+      listOf(
+        "metric_aqi",
+        "metric_wind",
+        "metric_humidity",
+        "metric_real_feel",
+        "metric_uv",
+        "metric_pressure",
+        "metric_precipitation",
+        "metric_solar",
+      ),
+      movedForward,
+    )
+
+    val movedBackward =
+      reorderAtmosphericCardsOnHover(
+        currentTags = movedForward,
+        movingTag = "metric_uv",
+        targetIndex = 1,
+      )
+    assertEquals(
+      listOf(
+        "metric_aqi",
+        "metric_uv",
+        "metric_wind",
+        "metric_humidity",
+        "metric_real_feel",
+        "metric_pressure",
+        "metric_precipitation",
+        "metric_solar",
+      ),
+      movedBackward,
+    )
+  }
+
+  @Test
+  fun dynamicThemeContrast_enforcesAccessibleContrastOnTrickyPastelAndDarkAccents() {
+    val paleLightScheme =
+      lightColorScheme(
+        primary = Color(0xFFD9E650),
+        secondary = Color(0xFFC5D86D),
+        tertiary = Color(0xFFB5C7FF),
+        background = Color(0xFFF6F6F2),
+        surface = Color(0xFFEEEEEA),
+        onSurface = Color(0xFF1A1B20),
+        onSurfaceVariant = Color(0xFF7A7D86),
+        outline = Color(0xFF5D6068),
+      )
+
+    val fixedLight = enforceDynamicTokenContrast(scheme = paleLightScheme, darkTheme = false)
+    val softFillLight = fixedLight.accentSoftFill.compositeOver(fixedLight.surfaceTranslucent)
+
+    assertTrue(wcagContrastRatio(fixedLight.accentPrimary, fixedLight.background) >= 4.7f)
+    assertTrue(wcagContrastRatio(fixedLight.accentPrimary, fixedLight.surfaceElevated) >= 4.7f)
+    assertTrue(wcagContrastRatio(fixedLight.accentPrimary, softFillLight) >= 4.7f)
+    assertTrue(wcagContrastRatio(fixedLight.inkPrimary, softFillLight) >= 4.5f)
+    assertTrue(wcagContrastRatio(fixedLight.inkMuted, fixedLight.surfaceElevated) >= 4.5f)
+    assertTrue(wcagContrastRatio(fixedLight.heroBlockInk, fixedLight.heroBlockFill) >= 5.0f)
+
+    // Verify status text ink helper also preserves light-mode contrast
+    val darkenedLightStatus = accessibleStatusTextInk(Color(0xFF6CD68E), isDark = false)
+    assertTrue(wcagContrastRatio(darkenedLightStatus, fixedLight.background) >= 4.5f)
+
+    val murkyDarkScheme =
+      darkColorScheme(
+        primary = Color(0xFF1F2B6C),
+        secondary = Color(0xFF28357A),
+        tertiary = Color(0xFF2B2250),
+        background = Color(0xFF000000),
+        surface = Color(0xFF0C0F14),
+        onSurface = Color(0xFFE0E2EC),
+        onSurfaceVariant = Color(0xFF4B505E),
+        outline = Color(0xFF6E7585),
+      )
+
+    val fixedDark = enforceDynamicTokenContrast(scheme = murkyDarkScheme, darkTheme = true)
+    val softFillDark = fixedDark.accentSoftFill.compositeOver(fixedDark.surfaceTranslucent)
+
+    assertTrue(wcagContrastRatio(fixedDark.accentPrimary, Color(0xFF000000)) >= 4.7f)
+    assertTrue(wcagContrastRatio(fixedDark.accentPrimary, fixedDark.surfaceElevated) >= 4.7f)
+    assertTrue(wcagContrastRatio(fixedDark.accentPrimary, softFillDark) >= 4.7f)
+    assertTrue(wcagContrastRatio(fixedDark.inkPrimary, softFillDark) >= 4.5f)
+    assertTrue(wcagContrastRatio(fixedDark.inkMuted, fixedDark.surfaceElevated) >= 4.5f)
+    assertTrue(wcagContrastRatio(fixedDark.heroBlockInk, fixedDark.heroBlockFill) >= 5.0f)
+  }
+
+  @Test
+  fun pixelGridController_postSyncWaveIncrementsCounter() {
+    val controller = PixelGridController()
+    assertEquals(0, controller.getPostSyncWaveCount())
+    controller.triggerPostSyncWave()
+    assertEquals(1, controller.getPostSyncWaveCount())
   }
 }

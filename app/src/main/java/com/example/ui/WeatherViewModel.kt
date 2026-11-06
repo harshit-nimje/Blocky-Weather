@@ -34,6 +34,7 @@ import com.example.util.BlockyNotificationManager
 data class WeatherUiState(
   val forecast: WeatherForecast? = null,
   val settings: UserSettings = UserSettings(),
+  val settingsLoaded: Boolean = false,
   val savedStations: List<SavedStation> = emptyList(),
   val isSyncing: Boolean = false,
   val isOffline: Boolean = false,
@@ -50,6 +51,7 @@ data class WeatherUiState(
   val statusBanner: String? = null,
   val onlineFunFact: String? = null,
   val quipCycleOffset: Int = 0,
+  val syncCompletedSeq: Int = 0,
   val activeSevereAlert: SevereWeatherAlert? = null,
 )
 
@@ -61,6 +63,7 @@ class WeatherViewModel(
 
   private data class TransientUiState(
     val isSyncing: Boolean = false,
+    val settingsLoaded: Boolean = false,
     val errorMessage: String? = null,
     val selectedHourIndex: Int? = null,
     val expandedDayIndex: Int? = null,
@@ -74,12 +77,15 @@ class WeatherViewModel(
     val statusBanner: String? = null,
     val onlineFunFact: String? = null,
     val quipCycleOffset: Int = 0,
+    val syncCompletedSeq: Int = 0,
+    val notificationRefreshSeq: Int = 0,
     val dismissedAlertIds: Set<String> = emptySet(),
   )
 
   private val transientState = MutableStateFlow(TransientUiState())
   private var searchJob: Job? = null
   private var autoRefreshJob: Job? = null
+  private var lastNotifiedSevereAlertId: String? = null
 
   private val settingsFlow: StateFlow<UserSettings> =
     preferencesRepository.settingsFlow.stateIn(
@@ -115,6 +121,7 @@ class WeatherViewModel(
         WeatherUiState(
           forecast = forecast,
           settings = settings,
+          settingsLoaded = transient.settingsLoaded,
           savedStations = stations,
           isSyncing = transient.isSyncing,
           isOffline = offline,
@@ -131,6 +138,7 @@ class WeatherViewModel(
           statusBanner = transient.statusBanner,
           onlineFunFact = transient.onlineFunFact,
           quipCycleOffset = transient.quipCycleOffset,
+          syncCompletedSeq = transient.syncCompletedSeq,
           activeSevereAlert = activeAlert,
         )
       }
@@ -141,6 +149,14 @@ class WeatherViewModel(
       )
 
   init {
+    viewModelScope.launch {
+      preferencesRepository.settingsFlow.collect {
+        if (!transientState.value.settingsLoaded) {
+          transientState.update { it.copy(settingsLoaded = true) }
+        }
+      }
+    }
+
     viewModelScope.launch {
       repository.ensureDefaultStationsSeeded()
       val activeId = settingsFlow.value.activeStationId
@@ -156,19 +172,39 @@ class WeatherViewModel(
     }
 
     viewModelScope.launch {
-      combine(activeForecastFlow, settingsFlow, transientState.map { it.quipCycleOffset }) { forecast, settings, offset ->
-        if (forecast != null && settings.pinnedNotificationEnabled) {
-          val quip = WeatherQuipEngine.buildQuipPool(forecast, seedOffset = offset).firstOrNull() ?: "Nice weather ngl."
-          BlockyNotificationManager.updatePinnedNotification(
-            context = GridcastApplication.instance,
-            forecast = forecast,
-            settings = settings,
-            quipText = quip,
-          )
-        } else if (forecast != null && !settings.pinnedNotificationEnabled) {
-          BlockyNotificationManager.cancelPinnedNotification(GridcastApplication.instance)
+      combine(
+          activeForecastFlow,
+          settingsFlow,
+          transientState.map { it.quipCycleOffset to it.notificationRefreshSeq }.distinctUntilChanged(),
+        ) { forecast, settings, (offset, _) ->
+          val ctx = GridcastApplication.instance
+          if (forecast != null && settings.pinnedNotificationEnabled) {
+            val quip =
+              WeatherQuipEngine.buildQuipPool(forecast, seedOffset = offset).firstOrNull()
+                ?: "Nice weather ngl."
+            BlockyNotificationManager.updatePinnedNotification(
+              context = ctx,
+              forecast = forecast,
+              settings = settings,
+              quipText = quip,
+            )
+          } else if (!settings.pinnedNotificationEnabled) {
+            BlockyNotificationManager.cancelPinnedNotification(ctx)
+          }
+
+          if (forecast != null && settings.severeAlertOverlayEnabled) {
+            val topAlert = SevereWeatherAlertEngine.evaluateAlerts(forecast).firstOrNull()
+            if (topAlert != null && topAlert.id != lastNotifiedSevereAlertId && BlockyNotificationManager.hasNotificationPermission(ctx)) {
+              lastNotifiedSevereAlertId = topAlert.id
+              BlockyNotificationManager.postSevereAlertNotification(
+                context = ctx,
+                alertTitle = topAlert.title,
+                alertDesc = topAlert.description,
+              )
+            }
+          }
         }
-      }.collect {}
+        .collect {}
     }
   }
 
@@ -223,6 +259,7 @@ class WeatherViewModel(
           transientState.update {
             it.copy(
               isSyncing = false,
+              syncCompletedSeq = it.syncCompletedSeq + 1,
               errorMessage = null,
               statusBanner =
                 if (forecast.isFromOfflineCache) {
@@ -287,11 +324,26 @@ class WeatherViewModel(
   }
 
   fun setPinnedNotificationEnabled(enabled: Boolean) {
-    viewModelScope.launch { preferencesRepository.setPinnedNotificationEnabled(enabled) }
+    viewModelScope.launch {
+      preferencesRepository.setPinnedNotificationEnabled(enabled)
+      transientState.update { it.copy(notificationRefreshSeq = it.notificationRefreshSeq + 1) }
+    }
   }
 
   fun setSevereAlertOverlayEnabled(enabled: Boolean) {
     viewModelScope.launch { preferencesRepository.setSevereAlertOverlayEnabled(enabled) }
+  }
+
+  fun refreshNotificationState() {
+    transientState.update { it.copy(notificationRefreshSeq = it.notificationRefreshSeq + 1) }
+  }
+
+  fun markInitialPermissionsPrompted() {
+    viewModelScope.launch { preferencesRepository.markInitialPermissionsPrompted() }
+  }
+
+  fun updateAtmosphericCardOrder(newOrder: List<String>) {
+    viewModelScope.launch { preferencesRepository.setAtmosphericCardOrder(newOrder) }
   }
 
   fun dismissSevereAlert(alertId: String) {

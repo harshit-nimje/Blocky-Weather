@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,14 +32,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.LocalGridcastTokens
 import com.example.ui.theme.SilkscreenFontFamily
+import com.example.ui.theme.SpaceGroteskFontFamily
 import kotlinx.coroutines.delay
 
 /**
@@ -132,10 +138,25 @@ fun PixelMatrixTemperature(
     val matrixWidthDp = pixelPitchDp * totalCols
     val matrixHeightDp = pixelPitchDp * totalRows
     val heroRowHeightDp = matrixHeightDp + 10.dp
-    val totalHeroGroupWidth = (railWidth + railToDigitsGap + matrixWidthDp).coerceAtMost(maxWidth)
+
+    val lengthScale =
+      when {
+        tempText.length >= 4 -> 0.78f
+        tempText.length == 3 -> 0.92f
+        else -> 1.0f
+      }
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val standardTempFontSp =
+      (matrixHeightDp.value * 0.94f * lengthScale).coerceIn(88f, 148f) / fontScale
 
     Row(
-      modifier = Modifier.width(totalHeroGroupWidth).height(heroRowHeightDp),
+      modifier =
+        if (useStandardHeroFont) {
+          Modifier.wrapContentWidth().height(heroRowHeightDp)
+        } else {
+          Modifier.width((railWidth + railToDigitsGap + matrixWidthDp).coerceAtMost(maxWidth))
+            .height(heroRowHeightDp)
+        },
       verticalAlignment = Alignment.CenterVertically,
     ) {
       // Left Thermal Range Rail hugging top-left (Up Arrow + High) and bottom-left (Down Arrow + Low) of the temp number
@@ -219,27 +240,40 @@ fun PixelMatrixTemperature(
         }
       }
 
-      Spacer(modifier = Modifier.width(railToDigitsGap))
+      Spacer(modifier = Modifier.width(if (useStandardHeroFont) 10.dp else railToDigitsGap))
 
-      // Huge Standalone Bold Temperature Number (Blocky Matrix vs Standard Bold Font)
-      Box(
-        modifier = Modifier.weight(1f).fillMaxHeight(),
-        contentAlignment = Alignment.CenterStart,
-      ) {
-        if (useStandardHeroFont) {
+      // Huge Standalone Bold Temperature Number (Blocky Matrix vs Bold App Space Grotesk Font)
+      if (useStandardHeroFont) {
+        Box(
+          modifier = Modifier.fillMaxHeight(),
+          contentAlignment = Alignment.Center,
+        ) {
           Text(
             text = tempText,
             style =
-              MaterialTheme.typography.displayLarge.copy(
-                fontSize = 58.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-1.5).sp,
+              TextStyle(
+                fontFamily = SpaceGroteskFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = standardTempFontSp.sp,
+                lineHeight = (standardTempFontSp * 0.94f).sp,
+                letterSpacing = (-3.5).sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle =
+                  LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both,
+                  ),
               ),
             color = tokens.inkPrimary,
             maxLines = 1,
-            modifier = Modifier.padding(start = 4.dp),
+            softWrap = false,
           )
-        } else {
+        }
+      } else {
+        Box(
+          modifier = Modifier.weight(1f).fillMaxHeight(),
+          contentAlignment = Alignment.CenterStart,
+        ) {
           Canvas(modifier = Modifier.width(matrixWidthDp).height(matrixHeightDp)) {
             val pitchX = size.width / totalCols
             val pitchY = size.height / totalRows

@@ -23,6 +23,19 @@ object BlockyNotificationManager {
   private const val NOTIFICATION_ID_PINNED = 1001
   private const val NOTIFICATION_ID_SEVERE_ALERT = 2002
 
+  fun hasNotificationPermission(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      if (ContextCompat.checkSelfPermission(
+          context,
+          android.Manifest.permission.POST_NOTIFICATIONS,
+        ) != PackageManager.PERMISSION_GRANTED
+      ) {
+        return false
+      }
+    }
+    return true
+  }
+
   fun createNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val notificationManager =
@@ -65,14 +78,8 @@ object BlockyNotificationManager {
       return
     }
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      if (ContextCompat.checkSelfPermission(
-          context,
-          android.Manifest.permission.POST_NOTIFICATIONS,
-        ) != PackageManager.PERMISSION_GRANTED
-      ) {
-        return
-      }
+    if (!hasNotificationPermission(context)) {
+      return
     }
 
     createNotificationChannels(context)
@@ -107,6 +114,8 @@ object BlockyNotificationManager {
         .setContentIntent(pendingIntent)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
+        .setShowWhen(false)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_STATUS)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .build()

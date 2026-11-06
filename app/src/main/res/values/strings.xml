@@ -46,12 +46,12 @@
     <string name="settings_dynamic_theme_title">MATERIAL YOU DEVICE COLORS</string>
     <string name="settings_dynamic_theme_desc">Adapt highlights, switches, buttons, and grid blocks to device wallpaper palette</string>
     <string name="settings_dynamic_theme_fallback_desc">Device dynamic wallpaper colors require Android 12+; uses weather accents</string>
-    <string name="settings_section_telemetry">TELEMETRY &amp; HERO NUDGES</string>
+    <string name="settings_section_telemetry">TELEMETRY &amp; COMMENTS</string>
     <string name="settings_unit_title_c">UNITS: CELSIUS (°C)</string>
     <string name="settings_unit_title_f">UNITS: FAHRENHEIT (°F)</string>
     <string name="settings_unit_desc">Switch dashboard temperatures, highs/lows, and dew point between °C and °F</string>
-    <string name="settings_nudges_title">FUNNY HERO WEATHER NUDGES</string>
-    <string name="settings_nudges_desc">Display context-smart weather quips and online meteorology fun facts</string>
+    <string name="settings_nudges_title">FUNNY WEATHER COMMENTS</string>
+    <string name="settings_nudges_desc">Display context-smart weather comments and online meteorology fun facts</string>
     <string name="settings_section_refresh_rate">SCREEN HZ OPTIMIZATION</string>
     <string name="hz_mode_default_title">DEFAULT (SYSTEM AUTO)</string>
     <string name="hz_mode_default_desc">Follows whatever refresh rate your phone suggests for adaptive efficiency</string>

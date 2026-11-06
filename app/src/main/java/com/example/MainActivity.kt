@@ -1,5 +1,6 @@
 package com.example
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.hardware.Sensor
@@ -11,8 +12,10 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.view.Display
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +24,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -44,6 +50,7 @@ import com.example.ui.screens.StationSelectorSheet
 import com.example.ui.screens.WeatherDashboardScreen
 import com.example.ui.theme.GridcastTheme
 import com.example.ui.theme.LocalGridcastTokens
+import com.example.util.BlockyNotificationManager
 
 class MainActivity : ComponentActivity() {
   private val weatherViewModel: WeatherViewModel by viewModels {
@@ -127,6 +134,67 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
 
   val gridController = remember { PixelGridController() }
   val lifecycleOwner = LocalLifecycleOwner.current
+
+  var hasNotificationPermission by
+    remember(context) {
+      mutableStateOf(BlockyNotificationManager.hasNotificationPermission(context))
+    }
+
+  val initialPermissionsLauncher =
+    rememberLauncherForActivityResult(
+      contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+      viewModel.markInitialPermissionsPrompted()
+      hasNotificationPermission = BlockyNotificationManager.hasNotificationPermission(context)
+      viewModel.refreshNotificationState()
+      val locationGranted =
+        results[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+          viewModel.hasCoarseLocationPermission()
+      if (locationGranted) {
+        viewModel.useCurrentCoarseLocation()
+      }
+    }
+
+  LaunchedEffect(uiState.settingsLoaded, uiState.settings.hasPromptedInitialPermissions) {
+    if (uiState.settingsLoaded && !uiState.settings.hasPromptedInitialPermissions) {
+      val missingPermissions = buildList {
+        if (!viewModel.hasCoarseLocationPermission()) {
+          add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        if (
+          Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !BlockyNotificationManager.hasNotificationPermission(context)
+        ) {
+          add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+      }
+      if (missingPermissions.isNotEmpty()) {
+        initialPermissionsLauncher.launch(missingPermissions.toTypedArray())
+      } else {
+        viewModel.markInitialPermissionsPrompted()
+        viewModel.refreshNotificationState()
+      }
+    }
+  }
+
+  DisposableEffect(context, lifecycleOwner, viewModel) {
+    val resumeObserver = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        hasNotificationPermission = BlockyNotificationManager.hasNotificationPermission(context)
+        viewModel.refreshNotificationState()
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(resumeObserver)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(resumeObserver) }
+  }
+
+  var lastCompletedSyncSeq by remember { mutableIntStateOf(uiState.syncCompletedSeq) }
+  LaunchedEffect(uiState.syncCompletedSeq) {
+    if (uiState.syncCompletedSeq > lastCompletedSyncSeq) {
+      lastCompletedSyncSeq = uiState.syncCompletedSeq
+      gridController.triggerPostSyncWave()
+    }
+  }
 
   DisposableEffect(context, lifecycleOwner, gridController, effectiveEcoMode) {
     val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
@@ -285,10 +353,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
       WeatherDashboardScreen(
         uiState = uiState,
         onOpenSettings = { viewModel.openSettings() },
-        onRefresh = {
-          gridController.triggerSyncSuccessCascade()
-          viewModel.refreshCurrentStation()
-        },
+        onRefresh = { viewModel.refreshCurrentStation() },
         onOpenStationSheet = { viewModel.openStationSheet() },
         onSelectHour = { idx ->
           gridController.triggerPlayfulFidget()
@@ -303,6 +368,9 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           gridController.triggerPlayfulFidget()
           viewModel.toggleExpandMetric(tag)
         },
+        onUpdateAtmosphericCardOrder = { newOrder ->
+          viewModel.updateAtmosphericCardOrder(newOrder)
+        },
         onHeroBlocksFidget = { gridController.triggerPlayfulFidget() },
         onDismissSevereAlert = { viewModel.dismissSevereAlert(it) },
         onCycleQuip = {
@@ -316,6 +384,13 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
         SettingsScreen(
           settings = uiState.settings,
           displayCaps = displayModeResolution.capabilities,
+          hasNotificationPermission = hasNotificationPermission,
+          onNotificationPermissionResult = { granted ->
+            hasNotificationPermission = granted
+            if (granted) {
+              viewModel.refreshNotificationState()
+            }
+          },
           onSetDarkMode = { viewModel.setDarkMode(it) },
           onSetDynamicTheme = { viewModel.setDynamicTheme(it) },
           onSetUseSolarDayNightTheme = { viewModel.setUseSolarDayNightTheme(it) },
@@ -330,10 +405,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           onSetPinnedNotificationEnabled = { viewModel.setPinnedNotificationEnabled(it) },
           onSetSevereAlertOverlayEnabled = { viewModel.setSevereAlertOverlayEnabled(it) },
           onOpenStations = { viewModel.openStationSheet() },
-          onRefreshWeather = {
-            gridController.triggerSyncSuccessCascade()
-            viewModel.refreshCurrentStation()
-          },
+          onRefreshWeather = { viewModel.refreshCurrentStation() },
           onClose = { viewModel.closeSettings() },
         )
       }

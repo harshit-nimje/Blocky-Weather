@@ -1,9 +1,19 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.ActivityCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -82,6 +92,10 @@ fun StationSelectorSheet(
   BackHandler(enabled = true) { onClose() }
 
   val tokens = LocalGridcastTokens.current
+  val context = LocalContext.current
+  val activity = context as? Activity
+  var wasLocRationaleBeforeLaunch by remember { mutableStateOf(false) }
+
   val locationPermissionLauncher =
     rememberLauncherForActivityResult(
       contract = ActivityResultContracts.RequestPermission()
@@ -89,6 +103,20 @@ fun StationSelectorSheet(
       if (granted) {
         onUseCoarseLocation()
       } else {
+        val nowRationale =
+          activity != null &&
+            ActivityCompat.shouldShowRequestPermissionRationale(
+              activity,
+              Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+        if (!wasLocRationaleBeforeLaunch && !nowRationale) {
+          val intent =
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = Uri.fromParts("package", context.packageName, null)
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+          runCatching { context.startActivity(intent) }
+        }
         onLocationPermissionDenied()
       }
     }
@@ -199,6 +227,12 @@ fun StationSelectorSheet(
           if (hasCoarseLocationPermission()) {
             onUseCoarseLocation()
           } else {
+            wasLocRationaleBeforeLaunch =
+              activity != null &&
+                ActivityCompat.shouldShowRequestPermissionRationale(
+                  activity,
+                  Manifest.permission.ACCESS_COARSE_LOCATION,
+                )
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
           }
         },

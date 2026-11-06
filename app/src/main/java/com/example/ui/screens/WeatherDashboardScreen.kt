@@ -1,12 +1,18 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -17,6 +23,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -52,8 +60,12 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +74,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -70,9 +88,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.R
+import com.example.data.local.reorderAtmosphericCardsOnHover
 import com.example.domain.model.DailyPoint
 import com.example.domain.model.HourlyPoint
 import com.example.domain.model.WeatherConditionType
@@ -118,6 +139,7 @@ fun WeatherDashboardScreen(
   onClearSelectedHour: () -> Unit,
   onToggleExpandDay: (Int) -> Unit,
   onToggleExpandMetric: (String) -> Unit,
+  onUpdateAtmosphericCardOrder: (List<String>) -> Unit = {},
   onHeroBlocksFidget: () -> Unit,
   onDismissSevereAlert: (String) -> Unit = {},
   onCycleQuip: () -> Unit = {},
@@ -304,8 +326,10 @@ fun WeatherDashboardScreen(
                     forecast = forecast,
                     useFahrenheit = useFahrenheit,
                     columns = 3,
+                    cardOrder = uiState.settings.atmosphericCardOrder,
                     expandedMetricTags = uiState.expandedMetricTags,
                     onToggleExpandMetric = onToggleExpandMetric,
+                    onUpdateCardOrder = onUpdateAtmosphericCardOrder,
                   )
                 }
                 BlockyEnterReveal(index = 4) {
@@ -368,8 +392,10 @@ fun WeatherDashboardScreen(
                     forecast = forecast,
                     useFahrenheit = useFahrenheit,
                     columns = if (isMediumGrid) 3 else 2,
+                    cardOrder = uiState.settings.atmosphericCardOrder,
                     expandedMetricTags = uiState.expandedMetricTags,
                     onToggleExpandMetric = onToggleExpandMetric,
+                    onUpdateCardOrder = onUpdateAtmosphericCardOrder,
                   )
                 }
 
@@ -932,22 +958,34 @@ private fun HourlyBlockTimelineSection(
   }
 }
 
+private data class MatrixGridLayoutSnapshot(
+  val orderedTags: List<String>,
+  val rowTopPx: FloatArray,
+  val rowHeightPx: FloatArray,
+  val slotTopLeftByTag: Map<String, Offset>,
+  val drawerTopByTag: Map<String, Float>,
+)
+
 @Composable
 private fun AtmosphericMatrixSection(
   forecast: WeatherForecast,
   useFahrenheit: Boolean,
   columns: Int,
+  cardOrder: List<String>,
   expandedMetricTags: Set<String>,
   onToggleExpandMetric: (String) -> Unit,
+  onUpdateCardOrder: (List<String>) -> Unit,
 ) {
   val tokens = LocalGridcastTokens.current
+  val haptic = LocalHapticFeedback.current
+  val density = LocalDensity.current
   val next24PrecipPeak = forecast.hourly.maxOfOrNull { it.precipProbPercent } ?: 0
   val todayDaily = forecast.daily.firstOrNull()
   val sunriseShort = todayDaily?.sunriseIso?.substringAfter('T', "06:30")?.take(5) ?: "06:30"
   val sunsetShort = todayDaily?.sunsetIso?.substringAfter('T', "18:00")?.take(5) ?: "18:00"
   val solarProgress = computeSolarProgress(todayDaily?.sunriseIso, todayDaily?.sunsetIso)
 
-  val cards =
+  val rawCards =
     listOf(
       MetricCardData(
         tag = "metric_real_feel",
@@ -1106,170 +1144,492 @@ private fun AtmosphericMatrixSection(
       ),
     )
 
+  val cardsByTag = rawCards.associateBy { it.tag }
+  var workingOrder by remember(cardOrder) { mutableStateOf(cardOrder) }
+  var draggingTag by remember { mutableStateOf<String?>(null) }
+  var heldCardTopLeftPx by remember { mutableStateOf(Offset.Zero) }
+  var heldGrabOffsetPx by remember { mutableStateOf(Offset.Zero) }
+
+  val orderedCards =
+    workingOrder.mapNotNull { cardsByTag[it] } + rawCards.filter { it.tag !in workingOrder }
+
   Column(modifier = Modifier.fillMaxWidth()) {
-    SectionHeaderLabel(title = stringResource(R.string.section_atmospheric_matrix))
+    SectionHeaderLabel(
+      title = stringResource(R.string.section_atmospheric_matrix),
+      trailingHint = if (draggingTag != null) "DROP IN SLOT" else "HOLD & DRAG",
+    )
     Spacer(modifier = Modifier.height(10.dp))
 
-    val rows = cards.chunked(columns)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      rows.forEachIndexed { rIdx, rowCards ->
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          rowCards.forEachIndexed { cIdx, card ->
-            val flatIndex = rIdx * columns + cIdx
-            val swatch = tokens.blockSwatches[flatIndex % tokens.blockSwatches.size]
-            val isExpanded = card.tag in expandedMetricTags
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+      val spacingDp = 8.dp
+      val spacingPx = with(density) { spacingDp.toPx() }
+      val cardWidthDp = (maxWidth - spacingDp * (columns - 1)) / columns
+      val cardWidthPx = with(density) { cardWidthDp.toPx() }
+      val defaultCardHeightPx = with(density) { 104.dp.roundToPx() }
+      val defaultDrawerHeightPx = with(density) { 196.dp.roundToPx() }
 
-            BlockyEnterReveal(
-              index = flatIndex + 2,
-              modifier = Modifier.weight(1f),
-            ) {
-              PixelBlockContainer(
-                modifier = Modifier.fillMaxWidth().testTag(card.tag),
-                isExpanded = isExpanded,
-                fillOverride = if (isExpanded) tokens.surfaceElevated else tokens.surfaceTranslucent,
-                contentPadding = PaddingValues(13.dp),
-                onClick = { onToggleExpandMetric(card.tag) },
-              ) {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                  ) {
-                    Row(
-                      modifier = Modifier.weight(1f),
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                      BlockySmallIcon(
-                        kind = card.icon,
-                        tint = tokens.inkSecondary,
-                        size = 15.dp,
-                      )
-                      Text(
-                        text = card.title,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = tokens.inkMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                      )
-                    }
-                    Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                      Text(
-                        text = if (isExpanded) "−" else "+",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isExpanded) tokens.accentPrimary else tokens.inkMuted,
-                      )
-                      Box(modifier = Modifier.size(10.dp).background(swatch))
+      val cardHeightsPx = remember { mutableStateMapOf<String, Int>() }
+      val drawerHeightsPx = remember { mutableStateMapOf<String, Int>() }
+      var gridCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+      val totalRows = (orderedCards.size + columns - 1) / columns
+      val rowTopPx = FloatArray(totalRows)
+      val rowHeightPx = FloatArray(totalRows)
+      val slotTopLeftByTag = HashMap<String, Offset>(orderedCards.size)
+      val drawerTopByTag = HashMap<String, Float>()
+
+      var cursorY = 0f
+      for (r in 0 until totalRows) {
+        val startIdx = r * columns
+        val endIdx = minOf(startIdx + columns, orderedCards.size)
+        val rHeight =
+          (startIdx until endIdx)
+            .maxOfOrNull { idx ->
+              (cardHeightsPx[orderedCards[idx].tag] ?: defaultCardHeightPx).toFloat()
+            }
+            ?: defaultCardHeightPx.toFloat()
+
+        rowTopPx[r] = cursorY
+        rowHeightPx[r] = rHeight
+
+        for (c in 0 until (endIdx - startIdx)) {
+          val card = orderedCards[startIdx + c]
+          slotTopLeftByTag[card.tag] = Offset(c * (cardWidthPx + spacingPx), cursorY)
+        }
+
+        cursorY += rHeight + spacingPx
+
+        if (draggingTag == null) {
+          for (idx in startIdx until endIdx) {
+            val rowCard = orderedCards[idx]
+            if (rowCard.tag in expandedMetricTags) {
+              drawerTopByTag[rowCard.tag] = cursorY
+              val dHeight = (drawerHeightsPx[rowCard.tag] ?: defaultDrawerHeightPx).toFloat()
+              cursorY += dHeight + spacingPx
+            }
+          }
+        }
+      }
+
+      val rawGridHeightPx = (cursorY - spacingPx).coerceAtLeast(defaultCardHeightPx.toFloat())
+      val animatedGridHeightPx by
+        animateFloatAsState(
+          targetValue = rawGridHeightPx,
+          animationSpec =
+            spring(
+              stiffness = Spring.StiffnessMediumLow,
+              dampingRatio = Spring.DampingRatioNoBouncy,
+            ),
+          label = "matrix_container_height",
+        )
+
+      val latestLayoutSnapshot by
+        rememberUpdatedState(
+          MatrixGridLayoutSnapshot(
+            orderedTags = orderedCards.map { it.tag },
+            rowTopPx = rowTopPx,
+            rowHeightPx = rowHeightPx,
+            slotTopLeftByTag = slotTopLeftByTag,
+            drawerTopByTag = drawerTopByTag,
+          )
+        )
+      val latestPersistedOrder by rememberUpdatedState(cardOrder)
+
+      Box(
+        modifier =
+          Modifier.fillMaxWidth()
+            .height(with(density) { animatedGridHeightPx.toDp() })
+            .onGloballyPositioned { coords ->
+              if (coords.isAttached) gridCoords = coords
+            }
+      ) {
+        // Highlighted empty target slot indicator that glides to the open slot where the held card will land
+        val activeDragTag = draggingTag
+        if (activeDragTag != null) {
+          val targetTopLeft = slotTopLeftByTag[activeDragTag] ?: Offset.Zero
+          val dragSlotIdx = orderedCards.indexOfFirst { it.tag == activeDragTag }.coerceAtLeast(0)
+          val dragRow = dragSlotIdx / columns
+          val targetSlotHeightDp =
+            with(density) {
+              rowHeightPx.getOrElse(dragRow) { defaultCardHeightPx.toFloat() }.toDp()
+            }
+          val animatedPlaceholderOffset by
+            animateIntOffsetAsState(
+              targetValue =
+                IntOffset(targetTopLeft.x.roundToInt(), targetTopLeft.y.roundToInt()),
+              animationSpec =
+                spring(
+                  stiffness = Spring.StiffnessMediumLow,
+                  dampingRatio = Spring.DampingRatioNoBouncy,
+                ),
+              label = "drop_slot_placeholder",
+            )
+
+          Box(
+            modifier =
+              Modifier.width(cardWidthDp)
+                .height(targetSlotHeightDp)
+                .zIndex(0f)
+                .offset { animatedPlaceholderOffset }
+                .border(1.5.dp, tokens.accentPrimary.copy(alpha = 0.72f))
+                .background(tokens.accentSoftFill.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center,
+          ) {
+            Text(
+              text = "DROP HERE",
+              style = MaterialTheme.typography.labelSmall,
+              color = tokens.accentPrimary,
+            )
+          }
+        }
+
+        // All 8 metric cards kept inside the same Box container so cross-row dragging never interrupts gestures
+        orderedCards.forEach { card ->
+          key(card.tag) {
+            val originalIndex = rawCards.indexOfFirst { it.tag == card.tag }.coerceAtLeast(0)
+            val swatch = tokens.blockSwatches[originalIndex % tokens.blockSwatches.size]
+            val isExpanded = card.tag in expandedMetricTags
+            val isDragged = draggingTag == card.tag
+            val isAnyDragging = draggingTag != null
+            val targetSlot = slotTopLeftByTag[card.tag] ?: Offset.Zero
+
+            val animatedOffset by
+              animateIntOffsetAsState(
+                targetValue =
+                  if (isDragged) {
+                    IntOffset(heldCardTopLeftPx.x.roundToInt(), heldCardTopLeftPx.y.roundToInt())
+                  } else {
+                    IntOffset(targetSlot.x.roundToInt(), targetSlot.y.roundToInt())
+                  },
+                animationSpec =
+                  if (isDragged) {
+                    snap()
+                  } else {
+                    spring(
+                      stiffness = Spring.StiffnessMediumLow,
+                      dampingRatio = Spring.DampingRatioNoBouncy,
+                    )
+                  },
+                label = "card_slot_${card.tag}",
+              )
+
+            var itemCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+            Box(
+              modifier =
+                Modifier.width(cardWidthDp)
+                  .zIndex(if (isDragged) 25f else 1f)
+                  .offset { animatedOffset }
+                  .onGloballyPositioned { coords ->
+                    if (coords.isAttached) itemCoords = coords
+                  }
+                  .onSizeChanged { size ->
+                    if (size.height > 0) {
+                      cardHeightsPx[card.tag] = size.height
                     }
                   }
+                  .graphicsLayer {
+                    if (isDragged) {
+                      scaleX = 1.04f
+                      scaleY = 1.04f
+                    }
+                  }
+                  .pointerInput(card.tag, columns, cardWidthPx, spacingPx) {
+                    detectDragGesturesAfterLongPress(
+                      onDragStart = { downOffset ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val gCoords = gridCoords?.takeIf { it.isAttached }
+                        val iCoords = itemCoords?.takeIf { it.isAttached }
+                        val startSlot =
+                          if (gCoords != null && iCoords != null) {
+                            gCoords.localPositionOf(iCoords, Offset.Zero)
+                          } else {
+                            latestLayoutSnapshot.slotTopLeftByTag[card.tag] ?: Offset.Zero
+                          }
+                        heldGrabOffsetPx = downOffset
+                        heldCardTopLeftPx = startSlot
+                        draggingTag = card.tag
+                      },
+                      onDrag = { change, dragAmount ->
+                        change.consume()
+                        val gCoords = gridCoords?.takeIf { it.isAttached }
+                        val iCoords = itemCoords?.takeIf { it.isAttached }
+                        val fingerInGrid =
+                          if (gCoords != null && iCoords != null) {
+                            gCoords.localPositionOf(iCoords, change.position)
+                          } else {
+                            heldCardTopLeftPx + heldGrabOffsetPx + dragAmount
+                          }
+                        heldCardTopLeftPx = fingerInGrid - heldGrabOffsetPx
 
-                  Text(
-                    text = card.primaryValue,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = tokens.inkPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                  )
+                        val snapshot = latestLayoutSnapshot
+                        val heldHeight =
+                          (cardHeightsPx[card.tag] ?: defaultCardHeightPx).toFloat()
+                        val heldCenter =
+                          Offset(
+                            heldCardTopLeftPx.x + cardWidthPx * 0.5f,
+                            heldCardTopLeftPx.y + heldHeight * 0.5f,
+                          )
+                        val hoverPoint = (fingerInGrid + heldCenter) * 0.5f
 
-                  Text(
-                    text = card.secondaryDetail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.inkSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                  )
+                        val currentTags = snapshot.orderedTags
+                        val fromIdx = currentTags.indexOf(card.tag)
+                        if (fromIdx != -1) {
+                          val fromRow = fromIdx / columns
+                          val fromCol = fromIdx % columns
+                          val fromCenter =
+                            Offset(
+                              fromCol * (cardWidthPx + spacingPx) + cardWidthPx * 0.5f,
+                              snapshot.rowTopPx.getOrElse(fromRow) { 0f } +
+                                snapshot.rowHeightPx.getOrElse(fromRow) { heldHeight } * 0.5f,
+                            )
+                          val hysteresisPx = 10.dp.toPx()
+                          val distFrom =
+                            kotlin.math.hypot(
+                              hoverPoint.x - fromCenter.x,
+                              hoverPoint.y - fromCenter.y,
+                            )
+
+                          var bestTargetIdx = -1
+                          var bestDist = Float.MAX_VALUE
+                          for (candidateIdx in currentTags.indices) {
+                            if (candidateIdx == fromIdx) continue
+                            val cRow = candidateIdx / columns
+                            val cCol = candidateIdx % columns
+                            val cX = cCol * (cardWidthPx + spacingPx)
+                            val cY = snapshot.rowTopPx.getOrElse(cRow) { 0f }
+                            val cH = snapshot.rowHeightPx.getOrElse(cRow) { heldHeight }
+                            val inSlotBounds =
+                              hoverPoint.x in
+                                (cX - spacingPx * 0.5f)..(cX + cardWidthPx + spacingPx * 0.5f) &&
+                                hoverPoint.y in
+                                  (cY - spacingPx * 0.5f)..(cY + cH + spacingPx * 0.5f)
+                            if (inSlotBounds) {
+                              val cCenter = Offset(cX + cardWidthPx * 0.5f, cY + cH * 0.5f)
+                              val distCandidate =
+                                kotlin.math.hypot(
+                                  hoverPoint.x - cCenter.x,
+                                  hoverPoint.y - cCenter.y,
+                                )
+                              if (
+                                distCandidate + hysteresisPx < distFrom &&
+                                  distCandidate < bestDist
+                              ) {
+                                bestDist = distCandidate
+                                bestTargetIdx = candidateIdx
+                              }
+                            }
+                          }
+
+                          if (bestTargetIdx != -1) {
+                            workingOrder =
+                              reorderAtmosphericCardsOnHover(
+                                currentTags = currentTags,
+                                movingTag = card.tag,
+                                targetIndex = bestTargetIdx,
+                              )
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                          }
+                        }
+                      },
+                      onDragEnd = {
+                        val finalOrder = latestLayoutSnapshot.orderedTags
+                        draggingTag = null
+                        if (finalOrder != latestPersistedOrder) {
+                          onUpdateCardOrder(finalOrder)
+                        }
+                      },
+                      onDragCancel = {
+                        draggingTag = null
+                        workingOrder = latestPersistedOrder
+                      },
+                    )
+                  }
+            ) {
+              BlockyEnterReveal(
+                index = originalIndex + 2,
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                PixelBlockContainer(
+                  modifier = Modifier.fillMaxWidth().testTag(card.tag),
+                  isExpanded = isExpanded || isDragged,
+                  isHighlighted = isDragged,
+                  fillOverride =
+                    when {
+                      isDragged -> tokens.accentSoftFill
+                      isExpanded -> tokens.surfaceElevated
+                      else -> tokens.surfaceTranslucent
+                    },
+                  contentPadding = PaddingValues(13.dp),
+                  onClick = {
+                    if (!isAnyDragging) {
+                      onToggleExpandMetric(card.tag)
+                    }
+                  },
+                ) {
+                  Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                      Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                      ) {
+                        BlockySmallIcon(
+                          kind = card.icon,
+                          tint = if (isDragged) tokens.accentPrimary else tokens.inkSecondary,
+                          size = 15.dp,
+                        )
+                        Text(
+                          text = card.title,
+                          style = MaterialTheme.typography.labelSmall,
+                          color = if (isDragged) tokens.inkPrimary else tokens.inkMuted,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis,
+                        )
+                      }
+                      Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                      ) {
+                        Text(
+                          text = if (isExpanded) "−" else "+",
+                          style = MaterialTheme.typography.labelSmall,
+                          color =
+                            if (isExpanded || isDragged) tokens.accentPrimary else tokens.inkMuted,
+                        )
+                        Box(modifier = Modifier.size(10.dp).background(swatch))
+                      }
+                    }
+
+                    Text(
+                      text = card.primaryValue,
+                      style = MaterialTheme.typography.headlineMedium,
+                      fontWeight = FontWeight.Bold,
+                      color = tokens.inkPrimary,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                    )
+
+                    Text(
+                      text = card.secondaryDetail,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = tokens.inkSecondary,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                    )
+                  }
                 }
               }
             }
           }
-          repeat(columns - rowCards.size) {
-            Spacer(modifier = Modifier.weight(1f))
-          }
         }
 
-        // Full-width compact architectural detail drawer below each row when any card in that row is expanded
-        val expandedInRow = rowCards.filter { it.tag in expandedMetricTags }
-        AnimatedVisibility(
-          visible = expandedInRow.isNotEmpty(),
-          enter =
-            expandVertically(animationSpec = tween(560, easing = FastOutSlowInEasing)) +
-              slideInVertically(animationSpec = tween(520, easing = FastOutSlowInEasing)) {
-                -it / 6
-              } +
-              fadeIn(tween(420, delayMillis = 60)),
-          exit =
-            shrinkVertically(animationSpec = tween(240, easing = FastOutSlowInEasing)) +
-              fadeOut(tween(150)),
-        ) {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            expandedInRow.forEach { activeCard ->
-              PixelBlockContainer(
-                modifier = Modifier.fillMaxWidth().testTag("${activeCard.tag}_expanded"),
-                isExpanded = true,
-                fillOverride = tokens.surfaceElevated,
-                contentPadding = PaddingValues(12.dp),
-              ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                  ) {
-                    Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                      BlockySmallIcon(
-                        kind = activeCard.icon,
-                        tint = tokens.accentPrimary,
-                        size = 15.dp,
-                      )
-                      Text(
-                        text = "${activeCard.title} · ${activeCard.primaryValue}",
-                        style =
-                          MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = SilkscreenFontFamily,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                          ),
-                        color = tokens.inkPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                      )
-                    }
-                    Text(
-                      text = "[× CLOSE]",
-                      style = MaterialTheme.typography.labelSmall,
-                      color = tokens.accentPrimary,
-                      modifier = Modifier.clickable { onToggleExpandMetric(activeCard.tag) },
-                    )
-                  }
+        // Expanded architectural detail drawers positioned directly below each corresponding card's row
+        if (draggingTag == null) {
+          orderedCards.forEach { activeCard ->
+            if (activeCard.tag in expandedMetricTags) {
+              key("${activeCard.tag}_expanded") {
+                val drawerTopPx = drawerTopByTag[activeCard.tag] ?: 0f
+                val animatedDrawerOffset by
+                  animateIntOffsetAsState(
+                    targetValue = IntOffset(0, drawerTopPx.roundToInt()),
+                    animationSpec =
+                      spring(
+                        stiffness = Spring.StiffnessMediumLow,
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                      ),
+                    label = "drawer_slot_${activeCard.tag}",
+                  )
 
-                  Box(
-                    modifier =
-                      Modifier.fillMaxWidth()
-                        .border(1.dp, tokens.gridBorder)
-                        .background(tokens.background)
-                        .padding(10.dp)
-                  ) {
-                    activeCard.expandedVisual()
-                  }
+                val drawerReveal = remember { Animatable(0f) }
+                LaunchedEffect(Unit) {
+                  drawerReveal.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                  )
+                }
 
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Box(
+                  modifier =
+                    Modifier.fillMaxWidth()
+                      .zIndex(2f)
+                      .offset { animatedDrawerOffset }
+                      .onSizeChanged { size ->
+                        if (size.height > 0) {
+                          drawerHeightsPx[activeCard.tag] = size.height
+                        }
+                      }
+                      .graphicsLayer {
+                        val p = drawerReveal.value
+                        alpha = p
+                        translationY = (1f - p) * (-8.dp.toPx())
+                      }
+                ) {
+                  PixelBlockContainer(
+                    modifier = Modifier.fillMaxWidth().testTag("${activeCard.tag}_expanded"),
+                    isExpanded = true,
+                    fillOverride = tokens.surfaceElevated,
+                    contentPadding = PaddingValues(12.dp),
                   ) {
-                    activeCard.expandedFacts.forEach { (k, v) ->
-                      Box(modifier = Modifier.weight(1f)) {
-                        DayDetailStat(label = k, value = v)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                      Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                        Row(
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                          BlockySmallIcon(
+                            kind = activeCard.icon,
+                            tint = tokens.accentPrimary,
+                            size = 15.dp,
+                          )
+                          Text(
+                            text = "${activeCard.title} · ${activeCard.primaryValue}",
+                            style =
+                              MaterialTheme.typography.labelMedium.copy(
+                                fontFamily = SilkscreenFontFamily,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                              ),
+                            color = tokens.inkPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                          )
+                        }
+                        Text(
+                          text = "[× CLOSE]",
+                          style = MaterialTheme.typography.labelSmall,
+                          color = tokens.accentPrimary,
+                          modifier = Modifier.clickable { onToggleExpandMetric(activeCard.tag) },
+                        )
+                      }
+
+                      Box(
+                        modifier =
+                          Modifier.fillMaxWidth()
+                            .border(1.dp, tokens.gridBorder)
+                            .background(tokens.background)
+                            .padding(10.dp)
+                      ) {
+                        activeCard.expandedVisual()
+                      }
+
+                      Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                        activeCard.expandedFacts.forEach { (k, v) ->
+                          Box(modifier = Modifier.weight(1f)) {
+                            DayDetailStat(label = k, value = v)
+                          }
+                        }
                       }
                     }
                   }
@@ -1467,18 +1827,34 @@ private fun DayDetailStat(label: String, value: String) {
 }
 
 @Composable
-private fun SectionHeaderLabel(title: String) {
+private fun SectionHeaderLabel(
+  title: String,
+  trailingHint: String? = null,
+) {
   val tokens = LocalGridcastTokens.current
   Row(
+    modifier = Modifier.fillMaxWidth(),
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
   ) {
-    Box(modifier = Modifier.size(10.dp).background(tokens.inkPrimary))
-    Text(
-      text = title,
-      style = MaterialTheme.typography.labelLarge,
-      color = tokens.inkPrimary,
-    )
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Box(modifier = Modifier.size(10.dp).background(tokens.inkPrimary))
+      Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = tokens.inkPrimary,
+      )
+    }
+    if (trailingHint != null) {
+      Text(
+        text = trailingHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = tokens.inkMuted,
+      )
+    }
   }
 }
 

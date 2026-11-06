@@ -1,6 +1,7 @@
 package com.example.ui.theme
 
 import android.os.Build
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -11,9 +12,53 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.example.domain.model.WeatherConditionType
+import kotlin.math.max
+import kotlin.math.min
+
+internal fun wcagContrastRatio(foreground: Color, background: Color): Float {
+  val l1 = foreground.luminance()
+  val l2 = background.luminance()
+  val lighter = max(l1, l2)
+  val darker = min(l1, l2)
+  return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+internal fun ensureMinContrastAgainst(
+  foreground: Color,
+  background: Color,
+  isDarkCanvas: Boolean,
+  minRatio: Float = 4.8f,
+): Color {
+  if (wcagContrastRatio(foreground, background) >= minRatio) return foreground
+  val targetAnchor = if (isDarkCanvas) Color(0xFFFAFAFA) else Color(0xFF121211)
+  var step = 0.05f
+  while (step <= 1.0f) {
+    val candidate = lerp(foreground, targetAnchor, step)
+    if (wcagContrastRatio(candidate, background) >= minRatio) {
+      return candidate
+    }
+    step += 0.05f
+  }
+  return targetAnchor
+}
+
+internal fun ensureMinContrastAgainstAll(
+  foreground: Color,
+  backgrounds: List<Color>,
+  isDarkCanvas: Boolean,
+  minRatio: Float = 4.8f,
+): Color {
+  var current = foreground
+  for (bg in backgrounds) {
+    current = ensureMinContrastAgainst(current, bg, isDarkCanvas, minRatio)
+  }
+  return current
+}
 
 @Immutable
 data class GridcastDesignTokens(
@@ -50,9 +95,9 @@ val LocalGridcastTokens =
       inkMuted = CleanRoomLightInkMuted,
       heroBlockFill = BlockLavenderLight,
       heroBlockInk = CleanRoomLightInkPrimary,
-      accentPrimary = Color(0xFF6B57D6),
-      accentSecondary = Color(0xFF4A90D9),
-      accentSoftFill = Color(0x55C6BDF7),
+      accentPrimary = Color(0xFF5542B8),
+      accentSecondary = Color(0xFF2F6DB3),
+      accentSoftFill = Color(0x36C6BDF7),
       blockSwatches =
         listOf(
           BlockSageLight,
@@ -82,20 +127,79 @@ fun GridcastTheme(
       null
     }
 
-  val accentPrimary = dynamicScheme?.primary ?: weatherAccent.primary
-  val accentSecondary = dynamicScheme?.tertiary ?: weatherAccent.secondary
-  val heroBlockFill = dynamicScheme?.primaryContainer ?: weatherAccent.heroBlockFill
-  val heroBlockInk = dynamicScheme?.onPrimaryContainer ?: weatherAccent.heroBlockInk
-  val accentSoftFill =
-    dynamicScheme?.primary?.copy(alpha = if (darkTheme) 0.22f else 0.16f) ?: weatherAccent.softFill
+  val tokens =
+    enforceDynamicTokenContrast(
+      scheme = dynamicScheme,
+      darkTheme = darkTheme,
+      weatherAccent = weatherAccent,
+    )
+  val bg = tokens.background
+  val surfaceTranslucent = tokens.surfaceTranslucent
+  val surfaceElevated = tokens.surfaceElevated
+  val gridBorder = tokens.gridBorder
+  val inkPrimary = tokens.inkPrimary
+  val inkSecondary = tokens.inkSecondary
+  val heroBlockFill = tokens.heroBlockFill
+  val heroBlockInk = tokens.heroBlockInk
+  val accentPrimary = tokens.accentPrimary
+  val accentSecondary = tokens.accentSecondary
 
-  // Preserve Clean-Room paper light & True AMOLED #000000 dark canvases while subtly blending
-  // Material You wallpaper surface tint into light mode
+  val onPrimaryResolved =
+    ensureMinContrastAgainst(
+      foreground = dynamicScheme?.onPrimary ?: if (darkTheme) Color(0xFF0A0B0F) else Color.White,
+      background = accentPrimary,
+      isDarkCanvas = accentPrimary.luminance() < 0.35f,
+      minRatio = 4.8f,
+    )
+
+  val colorScheme =
+    if (darkTheme) {
+      darkColorScheme(
+        primary = accentPrimary,
+        onPrimary = onPrimaryResolved,
+        primaryContainer = heroBlockFill,
+        onPrimaryContainer = heroBlockInk,
+        secondary = accentSecondary,
+        background = bg,
+        surface = surfaceTranslucent,
+        surfaceVariant = surfaceElevated,
+        onBackground = inkPrimary,
+        onSurface = inkPrimary,
+        onSurfaceVariant = inkSecondary,
+        outline = gridBorder,
+      )
+    } else {
+      lightColorScheme(
+        primary = accentPrimary,
+        onPrimary = onPrimaryResolved,
+        primaryContainer = heroBlockFill,
+        onPrimaryContainer = heroBlockInk,
+        secondary = accentSecondary,
+        background = bg,
+        surface = surfaceTranslucent,
+        surfaceVariant = surfaceElevated,
+        onBackground = inkPrimary,
+        onSurface = inkPrimary,
+        onSurfaceVariant = inkSecondary,
+        outline = gridBorder,
+      )
+    }
+
+  CompositionLocalProvider(LocalGridcastTokens provides tokens) {
+    MaterialTheme(colorScheme = colorScheme, typography = GridcastTypography, content = content)
+  }
+}
+
+internal fun enforceDynamicTokenContrast(
+  scheme: ColorScheme?,
+  darkTheme: Boolean,
+  weatherAccent: WeatherAccentPalette = weatherAccentFor(WeatherConditionType.CLEAR_DAY, darkTheme),
+): GridcastDesignTokens {
   val bg =
     if (darkTheme) {
       NightLabDarkBg
-    } else if (dynamicScheme != null) {
-      lerp(CleanRoomLightBg, dynamicScheme.background, 0.22f)
+    } else if (scheme != null) {
+      lerp(CleanRoomLightBg, scheme.background, 0.18f)
     } else {
       CleanRoomLightBg
     }
@@ -103,34 +207,85 @@ fun GridcastTheme(
   val surfaceTranslucent =
     if (darkTheme) {
       NightLabDarkSurface
-    } else if (dynamicScheme != null) {
-      lerp(CleanRoomLightSurface, dynamicScheme.surface, 0.25f)
+    } else if (scheme != null) {
+      lerp(CleanRoomLightSurface, scheme.surface, 0.20f)
     } else {
       CleanRoomLightSurface
     }
 
   val surfaceElevated =
     if (darkTheme) {
-      dynamicScheme?.let { lerp(NightLabDarkSurfaceElevated, it.surfaceVariant, 0.22f) }
+      scheme?.let { lerp(NightLabDarkSurfaceElevated, it.surfaceVariant, 0.18f) }
         ?: NightLabDarkSurfaceElevated
     } else {
-      dynamicScheme?.let { lerp(CleanRoomLightSurfaceElevated, it.surfaceVariant, 0.28f) }
+      scheme?.let { lerp(CleanRoomLightSurfaceElevated, it.surfaceVariant, 0.22f) }
         ?: CleanRoomLightSurfaceElevated
     }
 
   val gridBorder =
     if (darkTheme) {
-      dynamicScheme?.let { lerp(NightLabDarkBorder, it.outlineVariant, 0.28f) }
+      scheme?.let { lerp(NightLabDarkBorder, it.outlineVariant, 0.26f) }
         ?: NightLabDarkBorder
     } else {
-      dynamicScheme?.let { lerp(CleanRoomLightBorder, it.outlineVariant, 0.30f) }
+      scheme?.let { lerp(CleanRoomLightBorder, it.outlineVariant, 0.28f) }
         ?: CleanRoomLightBorder
     }
 
   val gridBorderStrong = if (darkTheme) NightLabDarkBorderStrong else CleanRoomLightBorderStrong
-  val inkPrimary = if (darkTheme) NightLabDarkInkPrimary else CleanRoomLightInkPrimary
-  val inkSecondary = if (darkTheme) NightLabDarkInkSecondary else CleanRoomLightInkSecondary
-  val inkMuted = if (darkTheme) NightLabDarkInkMuted else CleanRoomLightInkMuted
+
+  val rawAccentPrimary = scheme?.primary ?: weatherAccent.primary
+  val rawAccentSecondary = scheme?.tertiary ?: weatherAccent.secondary
+
+  val accentSoftFill =
+    if (scheme != null) {
+      rawAccentPrimary.copy(alpha = if (darkTheme) 0.16f else 0.11f)
+    } else {
+      weatherAccent.softFill
+    }
+
+  val compositedActiveBg = accentSoftFill.compositeOver(bg)
+  val compositedElevatedBg = accentSoftFill.compositeOver(surfaceElevated)
+  val surfaceList = listOf(bg, surfaceElevated, compositedActiveBg, compositedElevatedBg)
+
+  val accentPrimary =
+    ensureMinContrastAgainstAll(
+      foreground = rawAccentPrimary,
+      backgrounds = surfaceList,
+      isDarkCanvas = darkTheme,
+      minRatio = 4.8f,
+    )
+  val accentSecondary =
+    ensureMinContrastAgainstAll(
+      foreground = rawAccentSecondary,
+      backgrounds = listOf(bg, surfaceElevated, compositedActiveBg),
+      isDarkCanvas = darkTheme,
+      minRatio = 4.5f,
+    )
+
+  val rawInkPrimary = if (darkTheme) NightLabDarkInkPrimary else CleanRoomLightInkPrimary
+  val rawInkSecondary = if (darkTheme) NightLabDarkInkSecondary else CleanRoomLightInkSecondary
+  val rawInkMuted = if (darkTheme) NightLabDarkInkMuted else CleanRoomLightInkMuted
+
+  val inkPrimary = ensureMinContrastAgainstAll(rawInkPrimary, surfaceList, darkTheme, 9.5f)
+  val inkSecondary = ensureMinContrastAgainstAll(rawInkSecondary, surfaceList, darkTheme, 5.5f)
+  val inkMuted = ensureMinContrastAgainstAll(rawInkMuted, surfaceList, darkTheme, 4.6f)
+
+  val heroBlockFill = scheme?.primaryContainer ?: weatherAccent.heroBlockFill
+  val rawHeroBlockInk = scheme?.onPrimaryContainer ?: weatherAccent.heroBlockInk
+  val heroBlockIsDark = heroBlockFill.luminance() < 0.38f
+  val candidateHeroInk =
+    if (wcagContrastRatio(rawHeroBlockInk, heroBlockFill) >= 5.5f) {
+      rawHeroBlockInk
+    } else {
+      if (heroBlockIsDark) NightLabDarkInkPrimary else CleanRoomLightInkPrimary
+    }
+  val heroBlockInk =
+    ensureMinContrastAgainst(
+      foreground = candidateHeroInk,
+      background = heroBlockFill,
+      isDarkCanvas = heroBlockIsDark,
+      minRatio = 5.5f,
+    )
 
   val baseSwatches =
     if (darkTheme) {
@@ -152,11 +307,11 @@ fun GridcastTheme(
     }
 
   val swatches =
-    if (dynamicScheme != null) {
+    if (scheme != null) {
       listOf(
-        dynamicScheme.primaryContainer,
-        dynamicScheme.secondaryContainer,
-        dynamicScheme.tertiaryContainer,
+        scheme.primaryContainer,
+        scheme.secondaryContainer,
+        scheme.tertiaryContainer,
         baseSwatches[3],
         baseSwatches[4],
       )
@@ -164,60 +319,22 @@ fun GridcastTheme(
       baseSwatches
     }
 
-  val tokens =
-    GridcastDesignTokens(
-      isDark = darkTheme,
-      isDynamicThemeActive = dynamicScheme != null,
-      background = bg,
-      surfaceTranslucent = surfaceTranslucent,
-      surfaceElevated = surfaceElevated,
-      gridBorder = gridBorder,
-      gridBorderStrong = gridBorderStrong,
-      inkPrimary = inkPrimary,
-      inkSecondary = inkSecondary,
-      inkMuted = inkMuted,
-      heroBlockFill = heroBlockFill,
-      heroBlockInk = heroBlockInk,
-      accentPrimary = accentPrimary,
-      accentSecondary = accentSecondary,
-      accentSoftFill = accentSoftFill,
-      blockSwatches = swatches,
-    )
-
-  val colorScheme =
-    if (darkTheme) {
-      darkColorScheme(
-        primary = accentPrimary,
-        onPrimary = dynamicScheme?.onPrimary ?: inkPrimary,
-        primaryContainer = heroBlockFill,
-        onPrimaryContainer = heroBlockInk,
-        secondary = accentSecondary,
-        background = bg,
-        surface = surfaceTranslucent,
-        surfaceVariant = surfaceElevated,
-        onBackground = inkPrimary,
-        onSurface = inkPrimary,
-        onSurfaceVariant = inkSecondary,
-        outline = gridBorder,
-      )
-    } else {
-      lightColorScheme(
-        primary = accentPrimary,
-        onPrimary = dynamicScheme?.onPrimary ?: Color.White,
-        primaryContainer = heroBlockFill,
-        onPrimaryContainer = heroBlockInk,
-        secondary = accentSecondary,
-        background = bg,
-        surface = surfaceTranslucent,
-        surfaceVariant = surfaceElevated,
-        onBackground = inkPrimary,
-        onSurface = inkPrimary,
-        onSurfaceVariant = inkSecondary,
-        outline = gridBorder,
-      )
-    }
-
-  CompositionLocalProvider(LocalGridcastTokens provides tokens) {
-    MaterialTheme(colorScheme = colorScheme, typography = GridcastTypography, content = content)
-  }
+  return GridcastDesignTokens(
+    isDark = darkTheme,
+    isDynamicThemeActive = scheme != null,
+    background = bg,
+    surfaceTranslucent = surfaceTranslucent,
+    surfaceElevated = surfaceElevated,
+    gridBorder = gridBorder,
+    gridBorderStrong = gridBorderStrong,
+    inkPrimary = inkPrimary,
+    inkSecondary = inkSecondary,
+    inkMuted = inkMuted,
+    heroBlockFill = heroBlockFill,
+    heroBlockInk = heroBlockInk,
+    accentPrimary = accentPrimary,
+    accentSecondary = accentSecondary,
+    accentSoftFill = accentSoftFill,
+    blockSwatches = swatches,
+  )
 }

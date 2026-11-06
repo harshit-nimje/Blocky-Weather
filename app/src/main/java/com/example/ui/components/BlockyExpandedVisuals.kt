@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +45,7 @@ import com.example.domain.model.toCompassCardinal
 import com.example.domain.model.toDisplayTemp
 import com.example.ui.theme.LocalGridcastTokens
 import com.example.ui.theme.SilkscreenFontFamily
+import com.example.ui.theme.ensureMinContrastAgainst
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
@@ -50,6 +53,16 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.delay
+
+internal fun accessibleStatusTextInk(color: Color, isDark: Boolean): Color {
+  val referenceBg = if (isDark) Color(0xFF0A0B0F) else Color(0xFFF3F1EA)
+  return ensureMinContrastAgainst(
+    foreground = color,
+    background = referenceBg,
+    isDarkCanvas = isDark,
+    minRatio = 4.6f,
+  )
+}
 
 /**
  * Balanced multi-frame glide easing that traverses every intermediate grid cell smoothly
@@ -233,7 +246,7 @@ fun BlockySolarBowlVisual(
             fontFamily = SilkscreenFontFamily,
             fontSize = 10.sp,
           ),
-        color = sunGold,
+        color = accessibleStatusTextInk(sunGold, tokens.isDark),
         maxLines = 1,
         softWrap = false,
       )
@@ -251,7 +264,7 @@ fun BlockySolarBowlVisual(
             fontFamily = SilkscreenFontFamily,
             fontSize = 10.sp,
           ),
-        color = moonBlueGrey,
+        color = accessibleStatusTextInk(moonBlueGrey, tokens.isDark),
         maxLines = 1,
         softWrap = false,
       )
@@ -406,28 +419,28 @@ fun BlockyUvMeterVisual(
       Text(
         text = "0 SAFE",
         style = MaterialTheme.typography.labelSmall,
-        color = Color(0xFF22C55E),
+        color = accessibleStatusTextInk(Color(0xFF22C55E), tokens.isDark),
         maxLines = 1,
         softWrap = false,
       )
       Text(
         text = "3 MOD",
         style = MaterialTheme.typography.labelSmall,
-        color = Color(0xFFEAB308),
+        color = accessibleStatusTextInk(Color(0xFFEAB308), tokens.isDark),
         maxLines = 1,
         softWrap = false,
       )
       Text(
         text = "7 HIGH",
         style = MaterialTheme.typography.labelSmall,
-        color = Color(0xFFF97316),
+        color = accessibleStatusTextInk(Color(0xFFF97316), tokens.isDark),
         maxLines = 1,
         softWrap = false,
       )
       Text(
         text = "11+ EXT",
         style = MaterialTheme.typography.labelSmall,
-        color = Color(0xFFA855F7),
+        color = accessibleStatusTextInk(Color(0xFFA855F7), tokens.isDark),
         maxLines = 1,
         softWrap = false,
       )
@@ -441,7 +454,7 @@ fun BlockyUvMeterVisual(
           fontSize = 10.sp,
           fontWeight = FontWeight.Bold,
         ),
-      color = uvStatusColor,
+      color = accessibleStatusTextInk(uvStatusColor, tokens.isDark),
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
     )
@@ -456,6 +469,7 @@ fun BlockyCompactUvStrip(
   uvIndex: Double,
   modifier: Modifier = Modifier,
 ) {
+  val tokens = LocalGridcastTokens.current
   val anim = remember { Animatable(0f) }
   LaunchedEffect(uvIndex) {
     anim.snapTo(0f)
@@ -525,7 +539,7 @@ fun BlockyCompactUvStrip(
           fontSize = 10.sp,
           fontWeight = FontWeight.Bold,
         ),
-      color = uvColor,
+      color = accessibleStatusTextInk(uvColor, tokens.isDark),
       maxLines = 1,
       softWrap = false,
     )
@@ -781,7 +795,7 @@ fun BlockyHumidityGaugeVisual(
           fontSize = 10.sp,
           fontWeight = FontWeight.Bold,
         ),
-      color = aquaBright,
+      color = accessibleStatusTextInk(aquaBright, tokens.isDark),
     )
   }
 }
@@ -1055,7 +1069,7 @@ fun BlockyRealFeelVisual(
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
           ),
-        color = diffColor,
+        color = accessibleStatusTextInk(diffColor, tokens.isDark),
       )
       Text(
         text = "FEELS ${apparentTempC.toDisplayTemp(useFahrenheit)}°",
@@ -1162,9 +1176,21 @@ fun BlockyAqiMeterVisual(
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Text(text = "0 GOOD", style = MaterialTheme.typography.labelSmall, color = Color(0xFF22C55E))
-      Text(text = "100 MOD", style = MaterialTheme.typography.labelSmall, color = Color(0xFFEAB308))
-      Text(text = "200+ BAD", style = MaterialTheme.typography.labelSmall, color = Color(0xFFA855F7))
+      Text(
+        text = "0 GOOD",
+        style = MaterialTheme.typography.labelSmall,
+        color = accessibleStatusTextInk(Color(0xFF22C55E), tokens.isDark),
+      )
+      Text(
+        text = "100 MOD",
+        style = MaterialTheme.typography.labelSmall,
+        color = accessibleStatusTextInk(Color(0xFFEAB308), tokens.isDark),
+      )
+      Text(
+        text = "200+ BAD",
+        style = MaterialTheme.typography.labelSmall,
+        color = accessibleStatusTextInk(Color(0xFFA855F7), tokens.isDark),
+      )
     }
 
     Text(
@@ -1175,7 +1201,7 @@ fun BlockyAqiMeterVisual(
           fontSize = 10.sp,
           fontWeight = FontWeight.Bold,
         ),
-      color = statusColor,
+      color = accessibleStatusTextInk(statusColor, tokens.isDark),
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
     )

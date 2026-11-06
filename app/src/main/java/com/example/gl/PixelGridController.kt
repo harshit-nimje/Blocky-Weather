@@ -213,9 +213,17 @@ class PixelGridController {
   }
 
   private val syncCascadeCounter = AtomicInteger(0)
+  private val postSyncWaveCounter = AtomicInteger(0)
 
   fun triggerSyncSuccessCascade() {
     syncCascadeCounter.incrementAndGet()
+    if (ecoModeRef.get()) {
+      onRenderRequested?.invoke()
+    }
+  }
+
+  fun triggerPostSyncWave() {
+    postSyncWaveCounter.incrementAndGet()
     if (ecoModeRef.get()) {
       onRenderRequested?.invoke()
     }
@@ -236,4 +244,6 @@ class PixelGridController {
   fun getFidgetCount(): Int = fidgetCounter.get()
 
   fun getSyncCascadeCount(): Int = syncCascadeCounter.get()
+
+  fun getPostSyncWaveCount(): Int = postSyncWaveCounter.get()
 }

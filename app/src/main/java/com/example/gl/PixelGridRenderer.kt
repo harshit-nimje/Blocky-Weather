@@ -30,12 +30,14 @@ class PixelGridRenderer(
 ) : GLSurfaceView.Renderer {
 
   companion object {
-    private const val MAX_BLOCKS = 380
+    private const val MAX_BLOCKS = 640
     private const val TOUCH_POOL_SIZE = 128
     private const val RAIN_POOL_SIZE = 44
     private const val FLOATS_PER_VERTEX = 6
     private const val VERTICES_PER_QUAD = 4
     private const val INDICES_PER_QUAD = 6
+    private const val POST_SYNC_WAVE_DURATION_SEC = 1.65f
+    private const val POST_SYNC_WAVE_BAND_ROWS = 6.5f
   }
 
   private var widthPx: Float = 1080f
@@ -121,6 +123,9 @@ class PixelGridRenderer(
   private var burstSeq = 0
   private var lastProcessedFidget = 0
   private var lastProcessedSyncCascade = 0
+  private var lastProcessedPostSyncWave = 0
+  private var postSyncWaveActive = false
+  private var postSyncWaveAgeSec = 0f
   private var lastFrameNanos = 0L
   private var smoothedDt = 0.016f
   private var elapsedSec = 0f
@@ -277,27 +282,21 @@ class PixelGridRenderer(
       val halfW = (rawX1 - rawX0) * 0.5f * scale * scaleX
       val halfH = (rawY1 - rawY0) * 0.5f * scale * scaleY
 
-      val shearOffsetTopX = shearX * halfH
-      val shearOffsetBottomX = -shearX * halfH
-
-      val x0Top = cx - halfW + shearOffsetTopX
-      val x1Top = cx + halfW + shearOffsetTopX
-      val x0Bot = cx - halfW + shearOffsetBottomX
-      val x1Bot = cx + halfW + shearOffsetBottomX
-
+      val x0 = cx - halfW
+      val x1 = cx + halfW
       val y0 = cy - halfH
       val y1 = cy + halfH
 
-      vertexArray[ptr++] = x0Top; vertexArray[ptr++] = y0
+      vertexArray[ptr++] = x0; vertexArray[ptr++] = y0
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
-      vertexArray[ptr++] = x1Top; vertexArray[ptr++] = y0
+      vertexArray[ptr++] = x1; vertexArray[ptr++] = y0
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
-      vertexArray[ptr++] = x0Bot; vertexArray[ptr++] = y1
+      vertexArray[ptr++] = x0; vertexArray[ptr++] = y1
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
-      vertexArray[ptr++] = x1Bot; vertexArray[ptr++] = y1
+      vertexArray[ptr++] = x1; vertexArray[ptr++] = y1
       vertexArray[ptr++] = r; vertexArray[ptr++] = g; vertexArray[ptr++] = b; vertexArray[ptr++] = alpha
 
       blockCount++
@@ -828,10 +827,55 @@ class PixelGridRenderer(
           scale = 0.65f + 0.35f * popIn,
           scaleX = baseSquishX,
           scaleY = baseSquishY,
-          shearX = activeWindShear * 0.7f,
           jitterX = glitchX,
           jitterY = glitchY,
         )
+      }
+    }
+
+    // 4. Full-Phone-Height Collective Ripple Wave AFTER weather refresh completes:
+    // Sweeps continuously from the very top row (totalRows) all the way through row 0 at the bottom edge.
+    if (postSyncWaveActive) {
+      val progress = (postSyncWaveAgeSec / POST_SYNC_WAVE_DURATION_SEC).coerceIn(0f, 1f)
+      val rowsCount = totalRows.coerceAtLeast(10)
+      val startFrontRow = rowsCount.toFloat() + 2.5f
+      val endFrontRow = -POST_SYNC_WAVE_BAND_ROWS - 2.0f
+      val baseFrontRow = startFrontRow + (endFrontRow - startFrontRow) * progress
+      val colsDivisor = (totalCols - 1).coerceAtLeast(1).toFloat()
+
+      for (c in 0 until totalCols) {
+        val colNorm = c.toFloat() / colsDivisor
+        val archOffset = sin(colNorm * Math.PI.toFloat()) * 2.2f
+        val harmonicRipple = sin(colNorm * 9.42f + progress * 10f) * 0.72f
+        val colFrontRow = baseFrontRow + archOffset + harmonicRipple
+
+        val minRow = floor(colFrontRow).toInt().coerceAtLeast(0)
+        val maxRow =
+          kotlin.math.ceil(colFrontRow + POST_SYNC_WAVE_BAND_ROWS).toInt().coerceAtMost(rowsCount - 1)
+
+        for (r in minRow..maxRow) {
+          val distBehindFront = r.toFloat() - colFrontRow
+          if (distBehindFront in 0f..POST_SYNC_WAVE_BAND_ROWS) {
+            val u = distBehindFront / POST_SYNC_WAVE_BAND_ROWS
+            val crest = sin(u * Math.PI.toFloat()).coerceIn(0f, 1f)
+            val collectiveShimmer = 0.84f + 0.16f * cos(c * 1.15f + r * 0.85f - progress * 14f)
+            val intensity = (crest * collectiveShimmer).coerceIn(0f, 1f)
+            if (intensity > 0.14f) {
+              val blockScale = (0.48f + 0.50f * crest).coerceIn(0.42f, 0.98f)
+              val blockAlpha = intensity * (if (isDark) 0.78f else 0.72f)
+              val swatchIdx = (c + r + lastProcessedPostSyncWave + lastProcessedSyncCascade) % swatches.size
+              emitSwatchBlock(
+                col = c.toFloat(),
+                row = r.toFloat(),
+                spanCols = 1f,
+                spanRows = 1f,
+                swatchIdx = swatchIdx,
+                alpha = blockAlpha,
+                scale = blockScale,
+              )
+            }
+          }
+        }
       }
     }
 
@@ -995,22 +1039,18 @@ class PixelGridRenderer(
       }
     }
 
+    val postWave = controller.getPostSyncWaveCount()
     val syncCascade = controller.getSyncCascadeCount()
-    if (syncCascade != lastProcessedSyncCascade) {
+    if (postWave != lastProcessedPostSyncWave || syncCascade != lastProcessedSyncCascade) {
+      lastProcessedPostSyncWave = postWave
       lastProcessedSyncCascade = syncCascade
-      val cols = totalCols.toInt().coerceAtLeast(6)
-      val topRow = (totalRows.toFloat() - 1f).coerceAtLeast(0f)
-      for (c in 0 until cols) {
-        if (c % 2 == 0 || c % 3 == 0) {
-          val slot = allocateFreeTouchSlot()
-          tStartCol[slot] = c.toFloat()
-          tStartRow[slot] = topRow
-          tDirX[slot] = 0f
-          tDirY[slot] = -1f
-          tAgeSec[slot] = -(c % 5) * 0.05f
-          tDurationSec[slot] = 1.10f + (c % 4) * 0.12f
-          tSwatch[slot] = (syncCascade + c) % 5
-        }
+      postSyncWaveActive = true
+      postSyncWaveAgeSec = 0f
+    }
+    if (postSyncWaveActive) {
+      postSyncWaveAgeSec += dtSec
+      if (postSyncWaveAgeSec >= POST_SYNC_WAVE_DURATION_SEC) {
+        postSyncWaveActive = false
       }
     }
   }

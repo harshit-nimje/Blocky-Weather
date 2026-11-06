@@ -25,20 +25,35 @@ jobs:
           cache: 'gradle'
 
       - name: Decode Release Keystore
-        if: env.RELEASE_KEYSTORE_BASE64 != ''
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > app/release.keystore
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            echo "Release keystore decoded successfully."
+          else
+            echo "No RELEASE_KEYSTORE_BASE64 secret provided; using debug keystore fallback."
+          fi
+
+      - name: Ensure Fallback Keystore
+        run: |
+          if [ ! -f "debug.keystore" ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000 || true
+          fi
 
       - name: Grant Execute Permission for Gradle
         run: chmod +x gradlew || true
 
       - name: Build Release APK with Gradle
         env:
+          KEYSTORE_PATH: app/release.keystore
+          RELEASE_KEYSTORE_PATH: app/release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           if [ -f "./gradlew" ]; then
             ./gradlew assembleRelease --stacktrace

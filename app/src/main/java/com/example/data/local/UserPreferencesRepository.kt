@@ -37,6 +37,38 @@ enum class AutoRefreshInterval(val minutes: Int, val label: String) {
   }
 }
 
+val DEFAULT_ATMOSPHERIC_CARD_ORDER: List<String> =
+  listOf(
+    "metric_real_feel",
+    "metric_aqi",
+    "metric_wind",
+    "metric_humidity",
+    "metric_uv",
+    "metric_pressure",
+    "metric_precipitation",
+    "metric_solar",
+  )
+
+internal fun normalizeAtmosphericCardOrder(order: List<String>): List<String> {
+  val valid = order.filter { it in DEFAULT_ATMOSPHERIC_CARD_ORDER }.distinct()
+  return valid + DEFAULT_ATMOSPHERIC_CARD_ORDER.filterNot { it in valid }
+}
+
+internal fun reorderAtmosphericCardsOnHover(
+  currentTags: List<String>,
+  movingTag: String,
+  targetIndex: Int,
+): List<String> {
+  val fromIdx = currentTags.indexOf(movingTag)
+  if (fromIdx == -1 || currentTags.isEmpty()) return currentTags
+  val clampedTarget = targetIndex.coerceIn(0, currentTags.lastIndex)
+  if (clampedTarget == fromIdx) return currentTags
+  val updated = currentTags.toMutableList()
+  updated.removeAt(fromIdx)
+  updated.add(clampedTarget, movingTag)
+  return updated
+}
+
 data class UserSettings(
   val isDarkMode: Boolean = false,
   val useFahrenheit: Boolean = false,
@@ -49,6 +81,8 @@ data class UserSettings(
   val autoRefreshInterval: AutoRefreshInterval = AutoRefreshInterval.MIN_30,
   val pinnedNotificationEnabled: Boolean = true,
   val severeAlertOverlayEnabled: Boolean = true,
+  val hasPromptedInitialPermissions: Boolean = false,
+  val atmosphericCardOrder: List<String> = DEFAULT_ATMOSPHERIC_CARD_ORDER,
 ) {
   val ecoGridMode: Boolean
     get() = refreshRateMode == RefreshRateMode.BATTERY_SAVER
@@ -68,6 +102,8 @@ class UserPreferencesRepository(private val context: Context) {
     val AUTO_REFRESH_MINUTES = androidx.datastore.preferences.core.intPreferencesKey("auto_refresh_minutes")
     val PINNED_NOTIF_ENABLED = booleanPreferencesKey("pinned_notif_enabled")
     val SEVERE_ALERT_OVERLAY_ENABLED = booleanPreferencesKey("severe_alert_overlay_enabled")
+    val HAS_PROMPTED_INITIAL_PERMISSIONS = booleanPreferencesKey("has_prompted_initial_permissions")
+    val ATMOSPHERIC_CARD_ORDER = stringPreferencesKey("atmospheric_card_order")
   }
 
   val settingsFlow: Flow<UserSettings> =
@@ -83,6 +119,14 @@ class UserPreferencesRepository(private val context: Context) {
           RefreshRateMode.DEFAULT
         }
 
+      val rawOrder = prefs[Keys.ATMOSPHERIC_CARD_ORDER]
+      val resolvedOrder =
+        if (rawOrder.isNullOrBlank()) {
+          DEFAULT_ATMOSPHERIC_CARD_ORDER
+        } else {
+          normalizeAtmosphericCardOrder(rawOrder.split(','))
+        }
+
       UserSettings(
         isDarkMode = prefs[Keys.DARK_MODE] ?: false,
         useFahrenheit = prefs[Keys.USE_FAHRENHEIT] ?: false,
@@ -95,6 +139,8 @@ class UserPreferencesRepository(private val context: Context) {
         autoRefreshInterval = AutoRefreshInterval.fromMinutes(prefs[Keys.AUTO_REFRESH_MINUTES]),
         pinnedNotificationEnabled = prefs[Keys.PINNED_NOTIF_ENABLED] ?: true,
         severeAlertOverlayEnabled = prefs[Keys.SEVERE_ALERT_OVERLAY_ENABLED] ?: true,
+        hasPromptedInitialPermissions = prefs[Keys.HAS_PROMPTED_INITIAL_PERMISSIONS] ?: false,
+        atmosphericCardOrder = resolvedOrder,
       )
     }
 
@@ -147,5 +193,16 @@ class UserPreferencesRepository(private val context: Context) {
 
   suspend fun setSevereAlertOverlayEnabled(enabled: Boolean) {
     context.gridcastDataStore.edit { it[Keys.SEVERE_ALERT_OVERLAY_ENABLED] = enabled }
+  }
+
+  suspend fun markInitialPermissionsPrompted() {
+    context.gridcastDataStore.edit { it[Keys.HAS_PROMPTED_INITIAL_PERMISSIONS] = true }
+  }
+
+  suspend fun setAtmosphericCardOrder(order: List<String>) {
+    val normalized = normalizeAtmosphericCardOrder(order)
+    context.gridcastDataStore.edit {
+      it[Keys.ATMOSPHERIC_CARD_ORDER] = normalized.joinToString(",")
+    }
   }
 }
