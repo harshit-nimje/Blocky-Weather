@@ -26,7 +26,7 @@ jobs:
       - name: Ensure Debug Keystore
         run: |
           if [ ! -f "debug.keystore" ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000 || true
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -sigalg SHA256withRSA -validity 10000 || true
           fi
 
       - name: Grant Execute Permission for Gradle
