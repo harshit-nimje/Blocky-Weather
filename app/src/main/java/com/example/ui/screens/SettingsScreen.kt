@@ -63,6 +63,7 @@ fun SettingsScreen(
   displayCaps: DisplayRefreshCapabilities,
   onSetDarkMode: (Boolean) -> Unit,
   onSetDynamicTheme: (Boolean) -> Unit,
+  onSetUseSolarDayNightTheme: (Boolean) -> Unit = {},
   onSetUseFahrenheit: (Boolean) -> Unit,
   onSetShowHeroNudges: (Boolean) -> Unit,
   onSetRefreshRateMode: (RefreshRateMode) -> Unit,
@@ -147,6 +148,14 @@ fun SettingsScreen(
         BlockyEnterReveal(index = 0) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsSectionLabel(title = stringResource(R.string.settings_section_theme))
+
+            BlockyToggleSettingCard(
+              title = "AUTO DAY / NIGHT THEME",
+              subtitle = "Light mode during daytime · Dark mode at night",
+              checked = settings.useSolarDayNightTheme,
+              onCheckedChange = onSetUseSolarDayNightTheme,
+              switchTestTag = "settings_solar_day_night_switch",
+            )
 
             BlockyToggleSettingCard(
               title = stringResource(R.string.settings_dark_mode_title),

@@ -271,6 +271,7 @@ fun WeatherDashboardScreen(
                     useFahrenheit = useFahrenheit,
                     ecoMode = ecoMode,
                     showHeroNudges = showHeroNudges,
+                    hasActiveSevereAlert = uiState.activeSevereAlert != null,
                     onlineFunFact = uiState.onlineFunFact,
                     quipCycleOffset = uiState.quipCycleOffset,
                     onClearSelectedHour = onClearSelectedHour,
@@ -338,6 +339,7 @@ fun WeatherDashboardScreen(
                   useFahrenheit = useFahrenheit,
                   ecoMode = ecoMode,
                   showHeroNudges = showHeroNudges,
+                  hasActiveSevereAlert = uiState.activeSevereAlert != null,
                   onlineFunFact = uiState.onlineFunFact,
                   quipCycleOffset = uiState.quipCycleOffset,
                   onClearSelectedHour = onClearSelectedHour,
@@ -612,6 +614,7 @@ private fun HeroArchitecturalSection(
   useFahrenheit: Boolean,
   ecoMode: Boolean,
   showHeroNudges: Boolean,
+  hasActiveSevereAlert: Boolean = false,
   onlineFunFact: String?,
   quipCycleOffset: Int,
   onClearSelectedHour: () -> Unit,
@@ -721,7 +724,7 @@ private fun HeroArchitecturalSection(
           .padding(vertical = 4.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      if (showHeroNudges) {
+      if (showHeroNudges && !hasActiveSevereAlert) {
         Row(
           modifier =
             Modifier.fillMaxWidth()

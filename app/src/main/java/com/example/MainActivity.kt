@@ -69,6 +69,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
 
   val isDarkMode = uiState.settings.isDarkMode
   val useDynamicTheme = uiState.settings.useDynamicTheme
+  val useSolarDayNightTheme = uiState.settings.useSolarDayNightTheme
   val refreshRateMode = uiState.settings.refreshRateMode
 
   val selectedHour = uiState.selectedHourIndex?.let { uiState.forecast?.hourly?.getOrNull(it) }
@@ -79,6 +80,13 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
     selectedHour?.precipProbPercent ?: uiState.forecast?.hourly?.firstOrNull()?.precipProbPercent ?: 0
   val activeWindKmh = selectedHour?.windSpeedKmh ?: uiState.forecast?.windSpeedKmh ?: 0.0
   val activeIsDay = selectedHour?.isDay ?: uiState.forecast?.isDay ?: true
+
+  val effectiveDarkMode =
+    if (useSolarDayNightTheme) {
+      !activeIsDay
+    } else {
+      isDarkMode
+    }
 
   val systemPowerSave =
     remember(context) {
@@ -199,12 +207,12 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
     activePrecipProb,
     activeWindKmh,
     activeIsDay,
-    isDarkMode,
+    effectiveDarkMode,
     effectiveEcoMode,
   ) {
     gridController.updateWeatherState(
       condition = activeCondition,
-      isDarkMode = isDarkMode,
+      isDarkMode = effectiveDarkMode,
       ecoMode = effectiveEcoMode,
       precipitationMm = activePrecipMm,
       precipProbPercent = activePrecipProb,
@@ -218,14 +226,14 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
       val window = (view.context as? Activity)?.window
       if (window != null) {
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = !isDarkMode
-        controller.isAppearanceLightNavigationBars = !isDarkMode
+        controller.isAppearanceLightStatusBars = !effectiveDarkMode
+        controller.isAppearanceLightNavigationBars = !effectiveDarkMode
       }
     }
   }
 
   GridcastTheme(
-    darkTheme = isDarkMode,
+    darkTheme = effectiveDarkMode,
     weatherCondition = activeCondition,
     useDynamicTheme = useDynamicTheme,
   ) {
@@ -310,6 +318,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           displayCaps = displayModeResolution.capabilities,
           onSetDarkMode = { viewModel.setDarkMode(it) },
           onSetDynamicTheme = { viewModel.setDynamicTheme(it) },
+          onSetUseSolarDayNightTheme = { viewModel.setUseSolarDayNightTheme(it) },
           onSetUseFahrenheit = { viewModel.setUseFahrenheit(it) },
           onSetShowHeroNudges = { viewModel.setShowHeroNudges(it) },
           onSetRefreshRateMode = { mode ->

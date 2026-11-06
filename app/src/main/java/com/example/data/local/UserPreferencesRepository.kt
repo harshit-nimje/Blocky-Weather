@@ -42,6 +42,7 @@ data class UserSettings(
   val useFahrenheit: Boolean = false,
   val showHeroNudges: Boolean = true,
   val useDynamicTheme: Boolean = true,
+  val useSolarDayNightTheme: Boolean = false,
   val refreshRateMode: RefreshRateMode = RefreshRateMode.DEFAULT,
   val activeStationId: String = "station_san_francisco",
   val autoRefreshInterval: AutoRefreshInterval = AutoRefreshInterval.MIN_30,
@@ -58,6 +59,7 @@ class UserPreferencesRepository(private val context: Context) {
     val USE_FAHRENHEIT = booleanPreferencesKey("use_fahrenheit")
     val SHOW_HERO_NUDGES = booleanPreferencesKey("show_hero_nudges")
     val USE_DYNAMIC_THEME = booleanPreferencesKey("use_dynamic_theme")
+    val USE_SOLAR_DAY_NIGHT_THEME = booleanPreferencesKey("use_solar_day_night_theme")
     val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
     val ECO_GRID_MODE = booleanPreferencesKey("eco_grid_mode")
     val ACTIVE_STATION_ID = stringPreferencesKey("active_station_id")
@@ -84,6 +86,7 @@ class UserPreferencesRepository(private val context: Context) {
         useFahrenheit = prefs[Keys.USE_FAHRENHEIT] ?: false,
         showHeroNudges = prefs[Keys.SHOW_HERO_NUDGES] ?: true,
         useDynamicTheme = prefs[Keys.USE_DYNAMIC_THEME] ?: true,
+        useSolarDayNightTheme = prefs[Keys.USE_SOLAR_DAY_NIGHT_THEME] ?: false,
         refreshRateMode = resolvedHzMode,
         activeStationId = prefs[Keys.ACTIVE_STATION_ID] ?: "station_san_francisco",
         autoRefreshInterval = AutoRefreshInterval.fromMinutes(prefs[Keys.AUTO_REFRESH_MINUTES]),
@@ -106,6 +109,10 @@ class UserPreferencesRepository(private val context: Context) {
 
   suspend fun setUseDynamicTheme(enabled: Boolean) {
     context.gridcastDataStore.edit { it[Keys.USE_DYNAMIC_THEME] = enabled }
+  }
+
+  suspend fun setUseSolarDayNightTheme(enabled: Boolean) {
+    context.gridcastDataStore.edit { it[Keys.USE_SOLAR_DAY_NIGHT_THEME] = enabled }
   }
 
   suspend fun setRefreshRateMode(mode: RefreshRateMode) {
