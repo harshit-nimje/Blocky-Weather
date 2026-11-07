@@ -12,12 +12,20 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -44,6 +53,7 @@ import com.example.domain.model.HourlyPoint
 import com.example.domain.model.toCompassCardinal
 import com.example.domain.model.toDisplayTemp
 import com.example.ui.theme.LocalGridcastTokens
+import com.example.ui.theme.GridcastDesignTokens
 import com.example.ui.theme.SilkscreenFontFamily
 import com.example.ui.theme.ensureMinContrastAgainst
 import java.util.Locale
@@ -1208,3 +1218,724 @@ fun BlockyAqiMeterVisual(
   }
 }
 
+/**
+ * Pixel-art Visibility distance meter (0..20 km) with chunk-based clarity indicators.
+ */
+@Composable
+fun BlockyVisibilityVisual(
+  visibilityMeters: Double,
+  modifier: Modifier = Modifier,
+) {
+  val tokens = LocalGridcastTokens.current
+  var replayTrigger by remember { mutableIntStateOf(0) }
+  val anim = remember { Animatable(0f) }
+
+  LaunchedEffect(visibilityMeters, replayTrigger) {
+    anim.snapTo(0f)
+    if (replayTrigger == 0) delay(120L)
+    anim.animateTo(
+      targetValue = 1f,
+      animationSpec = tween(durationMillis = 940, easing = BlockyGlideEase),
+    )
+  }
+
+  val interactionSource = remember { MutableInteractionSource() }
+  val visKm = visibilityMeters / 1000.0
+  val p = anim.value
+  val visRatio = (visKm / 20.0).toFloat().coerceIn(0.05f, 1f) * p
+
+  val (statusLabel, statusColor) = when {
+    visKm >= 15.0 -> "CRYSTAL CLEAR · UNRESTRICTED" to Color(0xFF38BDF8)
+    visKm >= 10.0 -> "GOOD VISIBILITY · SHARP" to Color(0xFF4ADE80)
+    visKm >= 6.0 -> "MODERATE HAZE · FAIR" to Color(0xFFEAB308)
+    visKm >= 2.0 -> "MISTY · REDUCED RANGE" to Color(0xFFF97316)
+    else -> "DENSE FOG · LOW VISIBILITY" to Color(0xFFEF4444)
+  }
+
+  Column(
+    modifier = modifier
+      .fillMaxWidth()
+      .clickable(
+        interactionSource = interactionSource,
+        indication = null,
+        onClick = { replayTrigger++ },
+      ),
+    verticalArrangement = Arrangement.spacedBy(6.dp),
+  ) {
+    Canvas(modifier = Modifier.fillMaxWidth().height(30.dp)) {
+      val chunks = 16
+      val pitchX = size.width / chunks
+      val px = minOf(pitchX * 0.82f, 11.dp.toPx())
+      val padX = (pitchX - px) * 0.5f
+      val barY = size.height - px - 2.dp.toPx()
+
+      val litChunks = (visRatio * chunks).roundToInt()
+      for (c in 0 until chunks) {
+        val colNorm = c.toFloat() / (chunks - 1)
+        val reveal = ((p * 1.4f - colNorm * 0.6f) / 0.4f).coerceIn(0f, 1f)
+        if (reveal <= 0.02f) continue
+        val isLit = c < litChunks
+        val color = if (isLit) statusColor.copy(alpha = reveal) else tokens.gridBorder.copy(alpha = 0.4f * reveal)
+        drawRect(
+          color = color,
+          topLeft = Offset(c * pitchX + padX, barY),
+          size = Size(px, px),
+        )
+      }
+    }
+
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(text = "0 KM", style = MaterialTheme.typography.labelSmall, color = tokens.inkMuted)
+      Text(
+        text = String.format(Locale.US, "%.1f KM RANGE", visKm),
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontFamily = SilkscreenFontFamily,
+          fontSize = 10.sp,
+          fontWeight = FontWeight.Bold,
+        ),
+        color = accessibleStatusTextInk(statusColor, tokens.isDark),
+      )
+      Text(text = "20+ KM", style = MaterialTheme.typography.labelSmall, color = tokens.inkMuted)
+    }
+  }
+}
+
+/**
+ * Pixel-art Moon Phase visualizer with detailed pixel moon illustration and phase illumination matrix.
+ */
+@Composable
+fun BlockyMoonPhaseVisual(
+  illuminationPercent: Int = 78,
+  phaseName: String = "WAXING GIBBOUS",
+  isWaxing: Boolean = true,
+  lunarAgeDays: Double = 10.4,
+  daysToNextPhase: Double = 4.3,
+  nextPhaseName: String = "FULL MOON",
+  modifier: Modifier = Modifier,
+) {
+  val tokens = LocalGridcastTokens.current
+  var replayTrigger by remember { mutableIntStateOf(0) }
+  val anim = remember { Animatable(0f) }
+
+  LaunchedEffect(replayTrigger) {
+    anim.snapTo(0f)
+    if (replayTrigger == 0) delay(120L)
+    anim.animateTo(
+      targetValue = 1f,
+      animationSpec = tween(durationMillis = 1100, easing = BlockyGlideEase),
+    )
+  }
+
+  val interactionSource = remember { MutableInteractionSource() }
+  val p = anim.value
+  val moonDeepDark = Color(0xFF0B1120)
+  val moonShadow = Color(0xFF1E293B)
+  val moonMare = Color(0xFF334155)
+  val moonMareDark = Color(0xFF1E293B)
+  val moonMid = Color(0xFF94A3B8)
+  val moonBright = Color(0xFFE2E8F0)
+  val moonPureWhite = Color(0xFFFFFFFF)
+  val moonAura = Color(0xFF38BDF8)
+
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .clickable(
+        interactionSource = interactionSource,
+        indication = null,
+        onClick = { replayTrigger++ },
+      ),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(16.dp),
+  ) {
+    Canvas(modifier = Modifier.size(92.dp)) {
+      val grid = 23
+      val pitch = size.width / grid
+      val px = pitch * 0.94f
+      val pad = (pitch - px) * 0.5f
+      val center = 11f
+      val radius = 10.8f
+
+      // Deep space celestial star speckles
+      val starCoords = listOf(
+        1 to 1, 21 to 2, 0 to 20, 21 to 21, 2 to 11, 20 to 12, 1 to 19, 21 to 5
+      )
+      starCoords.forEach { (sc, sr) ->
+        val starA = ((p * 2f - 0.5f).coerceIn(0f, 1f)) * 0.65f
+        if (starA > 0.05f) {
+          drawRect(
+            color = Color.White.copy(alpha = starA),
+            topLeft = Offset(sc * pitch + pad, sr * pitch + pad),
+            size = Size(px * 0.5f, px * 0.5f),
+          )
+        }
+      }
+
+      for (r in 0 until grid) {
+        for (c in 0 until grid) {
+          val dx = c - center
+          val dy = r - center
+          val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+
+          if (dist <= radius + 0.6f) {
+            val revealDelay = (dist / radius).coerceIn(0f, 1f) * 0.5f
+            val cellProgress = ((p * 1.5f - revealDelay) / 0.5f).coerceIn(0f, 1f)
+            if (cellProgress <= 0.02f) continue
+
+            // Atmospheric corona / lunar halo ring
+            if (dist > radius - 0.2f && dist <= radius + 0.6f) {
+              val haloAlpha = 0.20f * cellProgress
+              drawRect(
+                color = moonAura.copy(alpha = haloAlpha),
+                topLeft = Offset(c * pitch + pad, r * pitch + pad),
+                size = Size(px, px),
+              )
+              continue
+            }
+
+            val xNorm = (dx / radius).coerceIn(-1f, 1f)
+            val yNorm = (dy / radius).coerceIn(-1f, 1f)
+            val zNorm = kotlin.math.sqrt((1f - xNorm * xNorm - yNorm * yNorm).coerceAtLeast(0f))
+
+            // Realistic 3D terminator calculation supporting waxing (lit right) & waning (lit left)
+            val sunSign = if (isWaxing) 1f else -1f
+            val phaseAngle = (illuminationPercent / 100f) * PI.toFloat()
+            val sunX = sunSign * kotlin.math.cos(PI.toFloat() - phaseAngle)
+            val sunZ = kotlin.math.sin(PI.toFloat() - phaseAngle)
+            val directDot = (xNorm * sunX + zNorm * sunZ)
+            val isLit = directDot > -0.03f
+            val intensity = ((directDot + 0.03f) / 1.03f).coerceIn(0f, 1f)
+
+            // Lunar Maria: Mare Tranquillitatis, Oceanus Procellarum, Mare Imbrium
+            val mariaNoise = (kotlin.math.sin(c * 0.52f + 1.1f) * kotlin.math.cos(r * 0.48f - 0.7f)) +
+              (kotlin.math.sin(c * 0.32f) * 0.28f)
+            val isMaria = mariaNoise > 0.25f && dist < (radius * 0.88f)
+
+            // Craters: Tycho (south with rays), Copernicus (mid-northwest), Kepler
+            val isTycho = (c in 10..12 && r in 17..19)
+            val isTychoRay = (r >= 14 && kotlin.math.abs(c - 11 - (r - 18) * 0.6f) < 0.6f) ||
+              (r >= 14 && kotlin.math.abs(c - 11 + (r - 18) * 0.7f) < 0.6f)
+            val isCopernicus = (c in 7..9 && r in 9..11)
+            val isKepler = (c in 4..6 && r in 11..12)
+
+            val isCraterRim = (c == 11 && r == 17) || (c == 8 && r == 9) || (c == 15 && r == 7) || (c == 5 && r == 11)
+            val isCraterPit = (c == 11 && r == 18) || (c == 8 && r == 10) || (c == 15 && r == 8) || (c == 5 && r == 12)
+
+            var cellColor = if (isLit) {
+              val baseLit = lerp(moonMid, moonBright, intensity)
+              when {
+                isCraterRim -> moonPureWhite
+                isCraterPit -> lerp(moonMare, moonDeepDark, 0.6f)
+                isTycho || isTychoRay -> lerp(baseLit, moonPureWhite, 0.45f)
+                isCopernicus -> lerp(baseLit, moonMareDark, 0.35f)
+                isKepler -> lerp(baseLit, moonPureWhite, 0.3f)
+                isMaria -> lerp(baseLit, moonMare, 0.55f)
+                else -> baseLit
+              }
+            } else {
+              // Dark side with gentle earthshine
+              when {
+                isMaria -> moonDeepDark
+                isCraterPit -> Color.Black
+                else -> moonShadow.copy(alpha = 0.82f)
+              }
+            }
+
+            // Specular solar limb highlight
+            if (isLit && dist > radius * 0.84f && directDot > 0.35f) {
+              cellColor = lerp(cellColor, moonPureWhite, 0.65f)
+            }
+
+            drawRect(
+              color = cellColor.copy(alpha = cellProgress),
+              topLeft = Offset(c * pitch + pad, r * pitch + pad),
+              size = Size(px, px),
+            )
+          }
+        }
+      }
+    }
+
+    Column(
+      modifier = Modifier.weight(1f),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = phaseName.uppercase(),
+          style = MaterialTheme.typography.titleSmall.copy(
+            fontFamily = SilkscreenFontFamily,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+          ),
+          color = tokens.inkPrimary,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+          text = "$illuminationPercent%",
+          style = MaterialTheme.typography.labelSmall.copy(
+            fontFamily = SilkscreenFontFamily,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+          ),
+          color = tokens.accentPrimary,
+        )
+      }
+
+      Text(
+        text = "DAY $lunarAgeDays OF 29.5D · SYNODIC CYCLE",
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+        color = tokens.inkMuted,
+        maxLines = 1,
+      )
+
+      PixelSegmentMeter(
+        fraction = (illuminationPercent / 100f) * p,
+        segments = 16,
+        activeColor = moonBright,
+        modifier = Modifier.fillMaxWidth().height(8.dp),
+      )
+
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.dp, tokens.gridBorder)
+          .background(tokens.surfaceTranslucent)
+          .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "NEXT: $nextPhaseName",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+          color = tokens.inkSecondary,
+          maxLines = 1
+        )
+        Text(
+          text = "IN ${daysToNextPhase}D",
+          style = MaterialTheme.typography.labelSmall.copy(
+            fontFamily = SilkscreenFontFamily,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold
+          ),
+          color = tokens.accentPrimary
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Architectural Mini Weather Station Console for a single day report.
+ * Replaces redundant 7-day bar charts with an informative, diagrammatic single-day block.
+ */
+@Composable
+fun BlockyDayMiniReport(
+  day: com.example.domain.model.DailyPoint,
+  useFahrenheit: Boolean,
+  lang: com.example.util.AppLanguage,
+  modifier: Modifier = Modifier,
+) {
+  val tokens = LocalGridcastTokens.current
+  val high = day.tempMaxC.toDisplayTemp(useFahrenheit)
+  val low = day.tempMinC.toDisplayTemp(useFahrenheit)
+  val swing = (day.tempMaxC - day.tempMinC).roundToInt()
+  val unitLabel = if (useFahrenheit) "°F" else "°C"
+  
+  Column(
+    modifier = modifier.fillMaxWidth(),
+    verticalArrangement = Arrangement.spacedBy(10.dp)
+  ) {
+    // 1. Top Section: Diurnal Thermal Arc + Condition Icon + Thermal Breakdown
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(14.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      // Temperature Swing Diagrammatic Pixel Arc
+      Box(
+        modifier = Modifier
+          .size(84.dp)
+          .border(1.dp, tokens.gridBorderStrong)
+          .background(tokens.surfaceElevated)
+          .padding(4.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+          val grid = 13
+          val pitch = size.width / grid
+          val px = pitch * 0.82f
+          val center = 6f
+          
+          // Outer perimeter grid
+          for (r in 0 until grid) {
+            for (c in 0 until grid) {
+              val dx = c - center
+              val dy = r - center
+              val d = kotlin.math.sqrt(dx * dx + dy * dy)
+              if (d in 5.2f..6.1f) {
+                drawRect(
+                  color = tokens.gridBorder.copy(alpha = 0.35f),
+                  topLeft = Offset(c * pitch, r * pitch),
+                  size = Size(px, px)
+                )
+              }
+            }
+          }
+          
+          // Stepped thermal arc: dawn to noon peak to dusk
+          val swingNorm = (swing.toFloat() / 18f).coerceIn(0.15f, 1f)
+          val totalSteps = (swingNorm * 18).roundToInt().coerceAtLeast(3)
+          for (step in 0..totalSteps) {
+            val frac = step.toFloat() / totalSteps.coerceAtLeast(1)
+            val angleRad = -PI.toFloat() * 0.85f + frac * PI.toFloat() * 1.70f
+            val tx = center + kotlin.math.cos(angleRad) * 5.6f
+            val ty = center + kotlin.math.sin(angleRad) * 5.6f
+            val stepColor = if (frac > 0.5f) tokens.accentPrimary else tokens.accentPrimary.copy(alpha = 0.55f)
+            drawRect(
+              color = stepColor,
+              topLeft = Offset(tx * pitch, ty * pitch),
+              size = Size(px, px)
+            )
+          }
+        }
+        BlockyWeatherIcon(condition = day.condition, size = 34.dp, animated = true)
+      }
+      
+      // High, Low, and Swing Breakdown with Visual Range Meter
+      Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        Text(
+          text = com.example.util.LocalizedStrings.conditionLabel(day.condition.displayTitle, lang),
+          style = MaterialTheme.typography.titleMedium.copy(
+            fontFamily = SilkscreenFontFamily,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+          ),
+          color = tokens.inkPrimary,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+        
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column {
+            Text(
+              text = com.example.util.LocalizedStrings.labelHigh(lang),
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+              color = tokens.inkMuted
+            )
+            Text(
+              text = "$high°",
+              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+              color = tokens.inkPrimary
+            )
+          }
+          Box(modifier = Modifier.width(1.dp).height(28.dp).background(tokens.gridBorder))
+          Column {
+            Text(
+              text = com.example.util.LocalizedStrings.labelLow(lang),
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+              color = tokens.inkMuted
+            )
+            Text(
+              text = "$low°",
+              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+              color = tokens.inkSecondary
+            )
+          }
+          Spacer(modifier = Modifier.weight(1f))
+          Column(horizontalAlignment = Alignment.End) {
+            Text(
+              text = "SWING",
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+              color = tokens.inkMuted
+            )
+            Text(
+              text = "$swing$unitLabel",
+              style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = SilkscreenFontFamily,
+                fontWeight = FontWeight.Bold
+              ),
+              color = tokens.accentPrimary
+            )
+          }
+        }
+
+        // Stepped thermal range indicator bar
+        PixelSegmentMeter(
+          fraction = (swing.toFloat() / 20f).coerceIn(0.1f, 1f),
+          segments = 14,
+          activeColor = tokens.accentPrimary,
+          modifier = Modifier.fillMaxWidth().height(6.dp)
+        )
+      }
+    }
+    
+    // 2. 4-Module Telemetry Array (Wind, Precip, UV Peak, Stability)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+      Box(modifier = Modifier.weight(1f)) {
+        MiniTelemetryCard(
+          label = com.example.util.LocalizedStrings.labelWind(lang),
+          value = "${day.windMaxKmh.roundToInt()} km/h",
+          subValue = if (day.windMaxKmh >= 35.0) "GUSTY" else "MODERATE",
+          icon = BlockyMetricIcon.WIND,
+          tokens = tokens
+        )
+      }
+      Box(modifier = Modifier.weight(1f)) {
+        MiniTelemetryCard(
+          label = com.example.util.LocalizedStrings.labelPrecipitation(lang),
+          value = "${day.precipProbMaxPercent}%",
+          subValue = if (day.precipProbMaxPercent >= 50) "CHANCE" else "LOW",
+          icon = BlockyMetricIcon.PRECIPITATION,
+          tokens = tokens
+        )
+      }
+      Box(modifier = Modifier.weight(1f)) {
+        val uvVal = day.uvMax.roundToInt()
+        MiniTelemetryCard(
+          label = com.example.util.LocalizedStrings.labelUvPeak(lang),
+          value = "$uvVal",
+          subValue = when {
+            uvVal >= 8 -> "VERY HIGH"
+            uvVal >= 6 -> "HIGH"
+            uvVal >= 3 -> "MODERATE"
+            else -> "LOW"
+          },
+          icon = BlockyMetricIcon.UV,
+          tokens = tokens
+        )
+      }
+      Box(modifier = Modifier.weight(1f)) {
+        MiniTelemetryCard(
+          label = com.example.util.LocalizedStrings.labelStability(lang),
+          value = "${swing}°",
+          subValue = if (swing <= 8) "STABLE" else "DYNAMIC",
+          icon = BlockyMetricIcon.PRESSURE,
+          tokens = tokens
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun MiniTelemetryCard(
+  label: String,
+  value: String,
+  subValue: String? = null,
+  icon: BlockyMetricIcon,
+  tokens: com.example.ui.theme.GridcastDesignTokens
+) {
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .border(1.dp, tokens.gridBorder)
+      .background(tokens.surfaceTranslucent)
+      .padding(horizontal = 6.dp, vertical = 7.dp),
+    verticalArrangement = Arrangement.spacedBy(2.dp)
+  ) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+      BlockySmallIcon(kind = icon, tint = tokens.accentPrimary, size = 11.dp)
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+        color = tokens.inkMuted,
+        maxLines = 1
+      )
+    }
+    Text(
+      text = value,
+      style = MaterialTheme.typography.labelMedium.copy(
+        fontWeight = FontWeight.Bold,
+        fontSize = 11.sp
+      ),
+      color = tokens.inkPrimary,
+      maxLines = 1
+    )
+    if (subValue != null) {
+      Text(
+        text = subValue,
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontSize = 7.5.sp,
+          fontFamily = SilkscreenFontFamily
+        ),
+        color = tokens.accentPrimary,
+        maxLines = 1
+      )
+    }
+  }
+}
+/**
+ * Visual trend chart for 7-day reports, replacing plain text summaries.
+ * Improved with temperature color-coding and detailed blocky labels.
+ */
+@Composable
+fun BlockyWeeklyTrendVisual(
+  daily: List<com.example.domain.model.DailyPoint>,
+  modifier: Modifier = Modifier,
+) {
+  val tokens = LocalGridcastTokens.current
+  
+  BoxWithConstraints(modifier = modifier.fillMaxWidth().height(140.dp)) {
+    val days = daily.size
+    val minT = daily.minOf { it.tempMinC }.toFloat() - 3f
+    val maxT = daily.maxOf { it.tempMaxC }.toFloat() + 3f
+    val span = (maxT - minT).coerceAtLeast(1f)
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+      val pitchX = size.width / days
+      
+      // Draw background pixel-grid pattern
+      val gridStep = 8.dp.toPx()
+      for (x in 0..(size.width / gridStep).toInt()) {
+        for (y in 0..(size.height / gridStep).toInt()) {
+          if ((x + y) % 2 == 0) {
+            drawRect(
+              color = tokens.gridBorder.copy(alpha = 0.08f),
+              topLeft = Offset(x * gridStep, y * gridStep),
+              size = Size(2.dp.toPx(), 2.dp.toPx())
+            )
+          }
+        }
+      }
+
+      // Draw horizontal reference lines (0°, 10°, 20°, 30°, 40°)
+      val referenceTemps = listOf(0f, 10f, 20f, 30f, 40f)
+      referenceTemps.forEach { t ->
+        if (t in minT..maxT) {
+          val y = size.height - ((t - minT) / span) * size.height
+          drawLine(
+            color = tokens.gridBorder.copy(alpha = 0.25f),
+            start = Offset(0f, y.toFloat()),
+            end = Offset(size.width, y.toFloat()),
+            strokeWidth = 1.dp.toPx()
+          )
+        }
+      }
+
+      daily.forEachIndexed { i, day ->
+        val centerX = i * pitchX + pitchX * 0.5f
+        val topY = size.height - ((day.tempMaxC.toFloat() - minT) / span) * size.height
+        val bottomY = size.height - ((day.tempMinC.toFloat() - minT) / span) * size.height
+        
+        // Color-coding based on max temperature
+        val blockColor = when {
+          day.tempMaxC >= 35.0 -> Color(0xFFEF4444) // Hot Red
+          day.tempMaxC >= 28.0 -> Color(0xFFF97316) // Warm Orange
+          day.tempMaxC >= 18.0 -> Color(0xFFFACC15) // Mild Yellow
+          day.tempMaxC >= 5.0 -> Color(0xFF4ADE80)  // Cool Green
+          else -> Color(0xFF38BDF8)               // Cold Blue
+        }
+        
+        val blockWidth = (pitchX * 0.45f).coerceIn(12.dp.toPx(), 24.dp.toPx())
+        val blockHeight = (bottomY - topY).coerceAtLeast(6.dp.toPx())
+        
+        // Shadow/Offset for blockiness
+        drawRect(
+          color = tokens.gridBorder.copy(alpha = 0.3f),
+          topLeft = Offset(centerX - blockWidth * 0.5f + 2.dp.toPx(), topY + 2.dp.toPx()),
+          size = Size(blockWidth, blockHeight)
+        )
+
+        // Main range block
+        drawRect(
+          color = blockColor.copy(alpha = 0.85f),
+          topLeft = Offset(centerX - blockWidth * 0.5f, topY),
+          size = Size(blockWidth, blockHeight)
+        )
+
+        // Architectural tips (pixel accents)
+        drawRect(
+          color = Color.White.copy(alpha = 0.4f),
+          topLeft = Offset(centerX - blockWidth * 0.5f, topY),
+          size = Size(blockWidth, 2.dp.toPx())
+        )
+        drawRect(
+          color = Color.Black.copy(alpha = 0.2f),
+          topLeft = Offset(centerX - blockWidth * 0.5f, bottomY - 2.dp.toPx()),
+          size = Size(blockWidth, 2.dp.toPx())
+        )
+      }
+    }
+
+    // Overlay for Text Labels (High/Low)
+    val boxWidth = this.maxWidth
+    daily.forEachIndexed { i, day ->
+      val pitchX = boxWidth / days
+      val centerX = (pitchX * i) + (pitchX / 2)
+      val topYRel = 1f - ((day.tempMaxC.toFloat() - minT) / span)
+      val bottomYRel = 1f - ((day.tempMinC.toFloat() - minT) / span)
+      
+      // High Temp Label
+      Box(
+        modifier = Modifier
+          .offset(x = centerX - 12.dp, y = (topYRel * 140).dp - 18.dp)
+          .size(24.dp, 16.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Text(
+          text = "${day.tempMaxC.roundToInt()}°",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+          color = tokens.inkPrimary
+        )
+      }
+
+      // Low Temp Label
+      Box(
+        modifier = Modifier
+          .offset(x = centerX - 12.dp, y = (bottomYRel * 140).dp + 2.dp)
+          .size(24.dp, 16.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Text(
+          text = "${day.tempMinC.roundToInt()}°",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+          color = tokens.inkMuted
+        )
+      }
+
+      // Day Initial
+      val dayLabel = try {
+        val sdf = java.text.SimpleDateFormat("E", Locale.US)
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(day.dateIso)
+        sdf.format(date).take(1).uppercase()
+      } catch (e: Exception) { "?" }
+
+      Box(
+        modifier = Modifier
+          .align(Alignment.BottomStart)
+          .offset(x = centerX - 8.dp, y = (-4).dp)
+          .size(16.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Text(
+          text = dayLabel,
+          style = MaterialTheme.typography.labelSmall.copy(fontFamily = SilkscreenFontFamily, fontSize = 10.sp),
+          color = tokens.inkSecondary
+        )
+      }
+    }
+  }
+}

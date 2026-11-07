@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +33,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -64,6 +69,8 @@ import com.example.ui.components.BlockyToggleSettingCard
 import com.example.ui.components.PixelBlockContainer
 import com.example.ui.theme.LocalGridcastTokens
 import com.example.ui.theme.SilkscreenFontFamily
+import com.example.util.AppLanguage
+import com.example.util.LocalizedStrings
 import kotlin.math.roundToInt
 
 data class DisplayRefreshCapabilities(
@@ -98,6 +105,9 @@ fun SettingsScreen(
 
   val tokens = LocalGridcastTokens.current
   val context = LocalContext.current
+  val resolvedLang = remember(settings.appLanguage) {
+    AppLanguage.resolveEffectiveLanguage(settings.appLanguage)
+  }
   val activity = context as? Activity
   val supportsMaterialYou = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
   val requiresRuntimeNotifPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -177,7 +187,7 @@ fun SettingsScreen(
           Spacer(modifier = Modifier.width(10.dp))
           Column {
             Text(
-              text = stringResource(R.string.settings_screen_title),
+              text = LocalizedStrings.settingsTitle(resolvedLang),
               style =
                 MaterialTheme.typography.titleLarge.copy(
                   fontFamily = SilkscreenFontFamily,
@@ -218,11 +228,11 @@ fun SettingsScreen(
         // Section 1: Appearance & Device Theme
         BlockyEnterReveal(index = 0) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingsSectionLabel(title = stringResource(R.string.settings_section_theme))
+            SettingsSectionLabel(title = LocalizedStrings.sectionTheme(resolvedLang))
 
             BlockyToggleSettingCard(
-              title = "AUTO DAY / NIGHT THEME",
-              subtitle = "Light mode in daytime · Dark mode at night",
+              title = LocalizedStrings.settingsDayNight(resolvedLang),
+              subtitle = LocalizedStrings.settingsDayNightSub(resolvedLang),
               checked = settings.useSolarDayNightTheme,
               onCheckedChange = { enabled ->
                 if (enabled) {
@@ -236,8 +246,8 @@ fun SettingsScreen(
             )
 
             BlockyToggleSettingCard(
-              title = "DARK MODE",
-              subtitle = "Force AMOLED dark theme always",
+              title = LocalizedStrings.settingsDarkMode(resolvedLang),
+              subtitle = LocalizedStrings.settingsDarkModeSub(resolvedLang),
               checked = settings.isDarkMode && !settings.useSolarDayNightTheme,
               onCheckedChange = { enabled ->
                 if (enabled) {
@@ -251,12 +261,12 @@ fun SettingsScreen(
             )
 
             BlockyToggleSettingCard(
-              title = stringResource(R.string.settings_dynamic_theme_title),
+              title = LocalizedStrings.settingsDynamicTheme(resolvedLang),
               subtitle =
                 if (supportsMaterialYou) {
-                  stringResource(R.string.settings_dynamic_theme_desc)
+                  LocalizedStrings.settingsDynamicThemeSub(resolvedLang)
                 } else {
-                  stringResource(R.string.settings_dynamic_theme_fallback_desc)
+                  LocalizedStrings.settingsDynamicThemeFallbackSub(resolvedLang)
                 },
               checked = settings.useDynamicTheme,
               onCheckedChange = onSetDynamicTheme,
@@ -264,8 +274,8 @@ fun SettingsScreen(
             )
 
             BlockyToggleSettingCard(
-              title = "REDUCE ANIMATIONS (PLAIN GRID)",
-              subtitle = "Disables background particle effects, weather rain & motion; retains clean graph paper grid",
+              title = LocalizedStrings.settingsReduceAnimations(resolvedLang),
+              subtitle = LocalizedStrings.settingsReduceAnimationsSub(resolvedLang),
               checked = settings.reduceAnimations,
               onCheckedChange = onSetReduceAnimations,
               switchTestTag = "settings_reduce_animations_switch",
@@ -276,61 +286,8 @@ fun SettingsScreen(
         // Section 2: Telemetry & Language
         BlockyEnterReveal(index = 1) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingsSectionLabel(title = "LANGUAGE & TELEMETRY")
+            SettingsSectionLabel(title = LocalizedStrings.sectionTelemetry(resolvedLang))
 
-            // Language Selector Card
-            val activeLang = com.example.util.AppLanguage.fromCode(settings.appLanguage)
-            Column(
-              modifier =
-                Modifier.fillMaxWidth()
-                  .background(tokens.surfaceElevated)
-                  .border(1.dp, tokens.gridBorder)
-                  .padding(12.dp),
-              verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-              Text(
-                text = "APP LANGUAGE",
-                style =
-                  MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = SilkscreenFontFamily,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                  ),
-                color = tokens.inkPrimary,
-              )
-              Text(
-                text = "Smartly adapts to device language, or pick manual locale",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                color = tokens.inkSecondary,
-              )
-
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                com.example.util.AppLanguage.entries.forEach { lang ->
-                  val isSelected = activeLang == lang
-                  PixelBlockContainer(
-                    isHighlighted = isSelected,
-                    fillOverride = if (isSelected) tokens.accentSoftFill else tokens.surfaceTranslucent,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                    onClick = { onSetAppLanguage(lang.code) },
-                  ) {
-                    Text(
-                      text = lang.code,
-                      style =
-                        MaterialTheme.typography.labelSmall.copy(
-                          fontFamily = SilkscreenFontFamily,
-                          fontSize = 10.sp,
-                          fontWeight = FontWeight.Bold,
-                        ),
-                      color = if (isSelected) tokens.accentPrimary else tokens.inkPrimary,
-                    )
-                  }
-                }
-              }
-            }
 
             BlockyToggleSettingCard(
               title =
@@ -339,23 +296,23 @@ fun SettingsScreen(
                 } else {
                   stringResource(R.string.settings_unit_title_c)
                 },
-              subtitle = stringResource(R.string.settings_unit_desc),
+              subtitle = LocalizedStrings.settingsUnitDesc(resolvedLang),
               checked = settings.useFahrenheit,
               onCheckedChange = onSetUseFahrenheit,
               switchTestTag = "settings_fahrenheit_switch",
             )
 
             BlockyToggleSettingCard(
-              title = stringResource(R.string.settings_nudges_title),
-              subtitle = stringResource(R.string.settings_nudges_desc),
+              title = LocalizedStrings.settingsNudges(resolvedLang),
+              subtitle = LocalizedStrings.settingsNudgesSub(resolvedLang),
               checked = settings.showHeroNudges,
               onCheckedChange = onSetShowHeroNudges,
               switchTestTag = "settings_nudges_switch",
             )
 
             BlockyToggleSettingCard(
-              title = "MAIN TEMPERATURE FONT",
-              subtitle = if (settings.useStandardHeroFont) "Standard bold typography font" else "Signature blocky pixel matrix digits",
+              title = LocalizedStrings.settingsHeroFont(resolvedLang),
+              subtitle = LocalizedStrings.settingsHeroFontSub(settings.useStandardHeroFont, resolvedLang),
               checked = settings.useStandardHeroFont,
               onCheckedChange = onSetUseStandardHeroFont,
               switchTestTag = "settings_standard_hero_font_switch",
@@ -376,17 +333,13 @@ fun SettingsScreen(
         // Section 4: System Notifications & Emergency Alerts
         BlockyEnterReveal(index = 3) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingsSectionLabel(title = "NOTIFICATIONS & MATRIX ALERTS")
+            SettingsSectionLabel(title = LocalizedStrings.sectionNotifications(resolvedLang))
 
             val effectivePinnedChecked = settings.pinnedNotificationEnabled && effectiveNotifGranted
             BlockyToggleSettingCard(
-              title = "PINNED STATUS BAR NOTIFICATION",
+              title = LocalizedStrings.settingsPinnedNotif(resolvedLang),
               subtitle =
-                if (!effectiveNotifGranted) {
-                  "Permission required — tap switch to allow persistent status bar card"
-                } else {
-                  "Display persistent live temperature & quip on device status bar"
-                },
+                LocalizedStrings.settingsPinnedNotifSub(effectiveNotifGranted, resolvedLang),
               checked = effectivePinnedChecked,
               onCheckedChange = { enabled ->
                 if (enabled) {
@@ -402,8 +355,8 @@ fun SettingsScreen(
             )
 
             BlockyToggleSettingCard(
-              title = "SEVERE WEATHER MATRIX OVERLAY",
-              subtitle = "Show emergency high-contrast overlay & alerts on gale wind, UV, pollution & storms",
+              title = LocalizedStrings.settingsMatrixOverlay(resolvedLang),
+              subtitle = LocalizedStrings.settingsMatrixOverlaySub(resolvedLang),
               checked = settings.severeAlertOverlayEnabled,
               onCheckedChange = { enabled ->
                 onSetSevereAlertOverlayEnabled(enabled)
@@ -423,7 +376,7 @@ fun SettingsScreen(
               ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                   Text(
-                    text = "NOTIFICATION PERMISSION BLOCKED OR NOT GRANTED YET",
+                    text = LocalizedStrings.notifBlocked(resolvedLang),
                     style = MaterialTheme.typography.labelMedium,
                     color = tokens.inkPrimary,
                   )
@@ -442,7 +395,7 @@ fun SettingsScreen(
                       onClick = { requestNotificationPermission("pinned") },
                     ) {
                       Text(
-                        text = "ALLOW PERMISSION",
+                        text = LocalizedStrings.actionAllowPermission(resolvedLang),
                         style = MaterialTheme.typography.labelSmall,
                         color = tokens.accentPrimary,
                       )
@@ -457,7 +410,7 @@ fun SettingsScreen(
                       onClick = { openNotificationSettings(context) },
                     ) {
                       Text(
-                        text = "APP SETTINGS",
+                        text = LocalizedStrings.actionAppSettings(resolvedLang),
                         style = MaterialTheme.typography.labelSmall,
                         color = tokens.inkPrimary,
                       )
@@ -535,7 +488,7 @@ fun SettingsScreen(
                   )
                   Spacer(modifier = Modifier.width(8.dp))
                   Text(
-                    text = "GRID STATIONS",
+                    text = LocalizedStrings.actionGridStations(resolvedLang),
                     style = MaterialTheme.typography.labelLarge,
                     color = tokens.inkPrimary,
                   )
@@ -564,7 +517,7 @@ fun SettingsScreen(
                   )
                   Spacer(modifier = Modifier.width(8.dp))
                   Text(
-                    text = "SYNC NOW",
+                    text = LocalizedStrings.actionSyncNow(resolvedLang),
                     style = MaterialTheme.typography.labelLarge,
                     color = tokens.inkPrimary,
                   )
@@ -580,10 +533,147 @@ fun SettingsScreen(
                   .padding(horizontal = 12.dp, vertical = 9.dp)
             ) {
               Text(
-                text = "TIP: PULL DOWN ANYWHERE ON THE WEATHER GRID TO TRIGGER PROGRESSIVE BLOCK SYNC.",
+                text = LocalizedStrings.settingsSyncTip(resolvedLang),
                 style = MaterialTheme.typography.labelSmall,
                 color = tokens.inkMuted,
               )
+            }
+          }
+        }
+
+        // Section 6: Localization (Moved to bottom)
+        BlockyEnterReveal(index = 5) {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingsSectionLabel(title = LocalizedStrings.sectionLanguage(resolvedLang))
+            LanguageDropdownCard(
+              currentLanguageCode = settings.appLanguage,
+              onLanguageSelected = onSetAppLanguage
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+      }
+    }
+  }
+}
+
+@Composable
+private fun LanguageDropdownCard(
+  currentLanguageCode: String,
+  onLanguageSelected: (String) -> Unit
+) {
+  val tokens = LocalGridcastTokens.current
+  val languages = com.example.util.AppLanguage.entries
+  val activeLang = com.example.util.AppLanguage.fromCode(currentLanguageCode)
+  var expanded by remember { mutableStateOf(false) }
+
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .background(tokens.surfaceElevated)
+      .border(1.dp, tokens.gridBorder)
+      .padding(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp)
+  ) {
+    Text(
+      text = LocalizedStrings.labelAppLanguage(activeLang),
+      style = MaterialTheme.typography.titleMedium.copy(
+        fontFamily = SilkscreenFontFamily,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+      ),
+      color = tokens.inkPrimary,
+    )
+    
+    PixelBlockContainer(
+      modifier = Modifier.fillMaxWidth().testTag("language_selector_button"),
+      isHighlighted = expanded,
+      contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+      onClick = { expanded = !expanded }
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column {
+          Text(
+            text = activeLang.nativeName,
+            style = MaterialTheme.typography.bodyLarge.copy(
+              fontWeight = FontWeight.Bold,
+              fontFamily = SilkscreenFontFamily,
+              fontSize = 13.sp
+            ),
+            color = tokens.inkPrimary
+          )
+          Text(
+            text = activeLang.displayName,
+            style = MaterialTheme.typography.labelSmall,
+            color = tokens.inkMuted
+          )
+        }
+        Icon(
+          imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+          contentDescription = null,
+          tint = if (expanded) tokens.accentPrimary else tokens.inkMuted
+        )
+      }
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+      visible = expanded,
+      enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+      exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(tokens.background)
+          .border(1.dp, tokens.gridBorderStrong)
+      ) {
+        languages.forEachIndexed { idx, lang ->
+          val isSelected = lang == activeLang
+          if (idx > 0) {
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(tokens.gridBorder))
+          }
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable {
+                onLanguageSelected(lang.code)
+                expanded = false
+              }
+              .background(if (isSelected) tokens.accentSoftFill else Color.Transparent)
+              .padding(horizontal = 16.dp, vertical = 14.dp)
+              .testTag("language_option_${lang.code}")
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column {
+                Text(
+                  text = lang.nativeName,
+                  style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                  ),
+                  color = if (isSelected) tokens.accentPrimary else tokens.inkPrimary
+                )
+                Text(
+                  text = lang.displayName,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = if (isSelected) tokens.accentPrimary.copy(alpha = 0.8f) else tokens.inkMuted
+                )
+              }
+              if (isSelected) {
+                Text(
+                  text = "✓",
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                  color = tokens.accentPrimary,
+                )
+              }
             }
           }
         }

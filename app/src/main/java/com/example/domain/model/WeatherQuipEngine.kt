@@ -1,28 +1,30 @@
 package com.example.domain.model
 
+import com.example.util.AppLanguage
+import com.example.util.LocalizedStrings
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 
 /**
  * Location-adaptive & multi-factor context engine for hero weather quips and nudges.
- * Combines psychrometric dew point / apparent heat stress (never misfiring on cool-humid air),
- * each city's 7-day baseline & daily temperature swing tendency, wind/visibility/UV/AQI telemetry,
- * and live online meteorology fun facts.
+ * Selects hyper-relevant meteorological lines based on real-time city conditions,
+ * seeded by location and time to avoid repetitive loops.
  */
 object WeatherQuipEngine {
 
-  private val fallbackMeteorologyFacts =
-    listOf(
-      "A single cumulonimbus thunderstorm cloud can hold over 500,000 tons of water droplets.",
-      "Petrichor is the earthy scent caused when raindrops trap tiny air bubbles that aerosolize soil oils.",
-      "Lightning bolts heat surrounding air to roughly 30,000 K—about five times hotter than the sun's surface.",
-      "Every snowflake's six-fold symmetry comes directly from the hexagonal crystal lattice of water ice.",
-      "Sunlight scatters shorter blue wavelengths more strongly in nitrogen and oxygen—the Rayleigh scattering behind blue skies.",
-      "Air pressure drops before storms because warm, moist air rises and leaves lower mass near the surface.",
-      "Cloud iridescence occurs when uniform water droplets diffract sunlight into pastel bands along cloud edges.",
-      "Warm foehn winds form when moist air cools rising up a mountain, sheds rain, and warms rapidly descending the leeward side.",
-    )
+  private val fallbackMeteorologyFacts = listOf(
+    "A single cumulonimbus cloud holds over 500,000 tons of water droplets.",
+    "Petrichor is caused by raindrops trapping air bubbles that aerosolize soil oils.",
+    "Lightning heats surrounding air to 30,000 K—five times hotter than the sun's surface.",
+    "Every snowflake's 6-fold symmetry reflects the hexagonal crystal lattice of water ice.",
+    "Rayleigh scattering scatters shorter blue wavelengths in nitrogen, creating blue skies.",
+    "Barometric pressure drops before storms as rising moist air leaves lower mass near ground.",
+    "Cloud iridescence occurs when uniform droplets diffract light into pastel bands.",
+    "Warm foehn winds heat rapidly descending the leeward side of mountains.",
+    "The longest recorded rainbow lasted 9 hours over Sheffield, England.",
+    "Sahara dust travels across the Atlantic to fertilize the Amazon rainforest."
+  )
 
   /**
    * Computes Australian BoM apparent temperature (°C) incorporating temperature, vapor pressure, and wind speed.
@@ -50,13 +52,14 @@ object WeatherQuipEngine {
 
   /**
    * Returns an ordered, deduplicated list of smart contextual, location-adaptive, and relatable
-   * weather lines plus online meteorology fun facts and random greetings.
+   * weather lines plus online meteorology fun facts.
    */
   fun buildQuipPool(
     forecast: WeatherForecast,
     selectedHourIndex: Int? = null,
     onlineFunFact: String? = null,
     seedOffset: Int = 0,
+    lang: AppLanguage = AppLanguage.ENGLISH
   ): List<String> {
     val selectedHour = selectedHourIndex?.let { forecast.hourly.getOrNull(it) }
     val condition = selectedHour?.condition ?: forecast.condition
@@ -79,7 +82,6 @@ object WeatherQuipEngine {
       if (selectedHour != null) {
         computeApparentTempC(tempC, humidity, windKmh)
       } else {
-        // Blend server apparent temperature with psychrometric apparent temperature for safety
         maxOf(forecast.apparentTempC, computeApparentTempC(tempC, humidity, windKmh))
       }
 
@@ -96,92 +98,9 @@ object WeatherQuipEngine {
         todaySwingC
       }
 
-    val weekMeanTempC =
-      if (forecast.daily.isNotEmpty()) {
-        forecast.daily.map { (it.tempMaxC + it.tempMinC) * 0.5 }.average()
-      } else {
-        tempC
-      }
-    val tempAnomalyC = tempC - weekMeanTempC
-    val tempPositionInDay =
-      ((tempC - todayMinC) / todaySwingC.coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
-
     val baseHourIdx = selectedHourIndex ?: 0
     val upcomingPrecipPeak =
       forecast.hourly.drop(baseHourIdx).take(6).maxOfOrNull { it.precipProbPercent } ?: 0
-    val next6hTempDeltaC =
-      (forecast.hourly.getOrNull(baseHourIdx + 6)?.tempC ?: tempC) - tempC
-
-    val activeTimeIso = selectedHour?.timeIso ?: forecast.hourly.firstOrNull()?.timeIso
-    val localHour = activeTimeIso?.substringAfter('T', "")?.take(2)?.toIntOrNull()
-    val isAfternoon = localHour != null && localHour in 12..18
-    val isNightOrLateEvening = !isDay || (localHour != null && (localHour >= 20 || localHour <= 5))
-
-    val contextual = LinkedHashSet<String>()
-
-    // 1. Acute / High-Signal Health & Weather Alerts
-    if ((usAqi != null && usAqi >= 90) || (pm25 != null && pm25 >= 30.0)) {
-      contextual.add("*coughs intensely* help me...")
-      contextual.add("Honey, where is my mask?")
-      contextual.add("Lungs are gonna complain today.")
-      contextual.add("air quality: extra crunchy today.")
-    }
-    if ((usAqi != null && usAqi >= 70) || (humidity >= 70 && tempC >= 22.0)) {
-      contextual.add("Bit stuffy here.")
-    }
-    if ((effectiveApparentC >= 36.0 && (tempC >= 31.0 || dewPointC >= 22.0)) || tempC >= 38.0) {
-      contextual.add("Basically a nuclear fusion outside. stay in.")
-      contextual.add("the sun is on a personal vengeance arc today.")
-      contextual.add("drink water before you turn into a raisin bro.")
-    }
-    if (isDay && uvIndex >= 5.0) {
-      contextual.add("use high quality >SPF 50 sunscreen, dont save money there!")
-      contextual.add("sunscreen now or tomato cosplay later, your call.")
-      if (uvIndex >= 6.0 && cloudCover <= 65) {
-        contextual.add("skin burn alert!")
-        contextual.add("uv is crazy rn, vampires are trembling.")
-      }
-    }
-
-    // 2. Clear Starry Night & Clean Air
-    if (!isDay && cloudCover <= 30 && visibilityM >= 8000.0 && (usAqi == null || usAqi <= 60)) {
-      contextual.add("Look up, the stars are pretty")
-      contextual.add("the moon is carrying the entire sky aesthetic tonight.")
-      if (tempC >= 12.0) {
-        contextual.add("midnight snack run weather is immaculate.")
-      }
-    }
-    if ((usAqi == null || usAqi <= 45) && cloudCover <= 40) {
-      contextual.add("Breathe in. Breathe out")
-    }
-
-    // 3. Hot / Sunny / Ice Cream / High Dew-Point Muggy / AC
-    if (tempC >= 24.0 || (isDay && condition == WeatherConditionType.CLEAR_DAY)) {
-      contextual.add("I crave icecream")
-    }
-    if (isDay && tempC >= 28.5 && cloudCover <= 50 && precipMm == 0.0) {
-      contextual.add("Dont go out barefeet today.")
-      contextual.add("car seatbelt buckle temperatures: critical.")
-      contextual.add("even the shadows are looking for shade rn.")
-    }
-    if (tempC >= 29.5 || effectiveApparentC >= 33.5) {
-      contextual.add("Cooked.")
-      contextual.add("stepped outside for 2 seconds, character development complete.")
-    }
-    // Foolproof psychrometric sweat check: high humidity at 14°C is cool mist, NOT sweating buckets
-    if (tempC >= 25.5 && (dewPointC >= 19.0 || (humidity >= 68 && effectiveApparentC >= 28.0))) {
-      contextual.add("sweating buckets huh?")
-      contextual.add("air is 90% soup today.")
-      contextual.add("hair volume just doubled for free, you are welcome.")
-    }
-    if (
-      (isAfternoon && tempC >= 26.5 && (dewPointC >= 17.5 || humidity >= 58)) ||
-        (isNightOrLateEvening && tempC >= 23.0 && (dewPointC >= 17.0 || humidity >= 60)) ||
-        (tempC >= 28.0 && humidity >= 55) ||
-        effectiveApparentC >= 30.0
-    ) {
-      contextual.add("Sleep with AC on.")
-    }
 
     val isRainingNow =
       condition == WeatherConditionType.RAIN ||
@@ -190,207 +109,151 @@ object WeatherQuipEngine {
         condition == WeatherConditionType.THUNDERSTORM ||
         precipMm > 0.1
 
-    // 4. Cool / Mild Damp Air & Cosy Tea Weather
-    if (tempC in 8.0..19.5 && humidity >= 78 && precipMm <= 0.1) {
-      if (condition == WeatherConditionType.FOG || visibilityM <= 4000.0) {
-        contextual.add("Can barely see two blocks ahead. Fog claimed the whole grid.")
-        contextual.add("render distance set to 2 chunks.")
-      } else {
-        contextual.add("Chilly and damp at ${tempC.roundToInt()}°—hoodie air, zero sweat.")
+    // Group 1: Priority Acute / Weather-Triggered (Specific to this city right now)
+    val prioritySpecific = mutableListOf<String>()
+
+    if ((usAqi != null && usAqi >= 90) || (pm25 != null && pm25 >= 30.0)) {
+      prioritySpecific.add(LocalizedStrings.quipCough(lang))
+      prioritySpecific.add("Air quality: extra crunchy in ${forecast.cityName} today.")
+      prioritySpecific.add("Mask up—lungs are gonna complain today.")
+    }
+
+    if ((effectiveApparentC >= 35.0 && (tempC >= 31.0 || dewPointC >= 22.0)) || tempC >= 38.0) {
+      prioritySpecific.add(LocalizedStrings.quipNuclearFusion(lang))
+      prioritySpecific.add("The sun is on a personal vengeance arc today.")
+      prioritySpecific.add("Drink water before you turn into a raisin.")
+    } else if (tempC >= 25.0 || (isDay && condition == WeatherConditionType.CLEAR_DAY)) {
+      prioritySpecific.add(LocalizedStrings.quipIceCream(lang))
+      if (isDay && tempC >= 28.5) {
+        prioritySpecific.add("Car seatbelt buckle temperature: critical hazard.")
+        prioritySpecific.add("Stepped outside for 2 seconds, character development complete.")
       }
-    } else if (condition == WeatherConditionType.FOG || visibilityM <= 3000.0) {
-      contextual.add("render distance set to 2 chunks.")
-      contextual.add("bro turn up brightness, life is in low visibility mode.")
+    }
+
+    if (isDay && uvIndex >= 5.0) {
+      prioritySpecific.add("Use high quality >SPF 50 sunscreen—don't cut corners there!")
+      prioritySpecific.add("Sunscreen now or tomato cosplay later, your call.")
+    }
+
+    if (isRainingNow || upcomingPrecipPeak >= 45) {
+      prioritySpecific.add(LocalizedStrings.quipUmbrella(lang))
+      when (condition) {
+        WeatherConditionType.THUNDERSTORM -> {
+          prioritySpecific.add("*Thunder Crackles* Thor is practicing drums overhead.")
+          prioritySpecific.add("Sky is taking flash photography without permission.")
+        }
+        WeatherConditionType.HEAVY_RAIN -> {
+          prioritySpecific.add("Raining cats and dogs—socks are in grave danger.")
+          prioritySpecific.add("Sky forgot to turn the tap off in ${forecast.cityName}.")
+        }
+        else -> {
+          prioritySpecific.add("Free car wash outside rn. Grab an umbrella.")
+          prioritySpecific.add("Check the weather before wearing white sneakers!")
+        }
+      }
     }
 
     if (tempC <= 16.0 || isRainingNow || humidity >= 70) {
-      contextual.add("A cup of tea wont hurt nobody.")
-      contextual.add("wrapped up in blankies.")
+      prioritySpecific.add(LocalizedStrings.quipTea(lang))
     }
 
-    // 5. Rainy / Stormy / Heavy Rain / Thunderstorm
-    if (isRainingNow || upcomingPrecipPeak >= 45) {
-      contextual.add("carry umbrellas, you are welcome")
-      contextual.add("did you check the weather before wearing white shoes? brave.")
-      when (condition) {
-        WeatherConditionType.HEAVY_RAIN -> {
-          contextual.add("Better not get splashed today. Its raining... Cats and dogs?")
-          contextual.add("rain gonna fill up to your ankles today.")
-          contextual.add("Harvest some rain water dude.")
-          contextual.add("socks are in grave danger today.")
-          contextual.add("sky forgot to turn the tap off.")
-        }
-        WeatherConditionType.THUNDERSTORM -> {
-          contextual.add("*Thunder Crackles*")
-          contextual.add("sky is taking flash photography without permission.")
-          contextual.add("thor is aggressively practicing drums overhead.")
-        }
-        WeatherConditionType.DRIZZLE -> {
-          contextual.add("Light drizzle. Just wet enough to ruin clean sneakers.")
-          contextual.add("free car wash outside rn.")
-        }
-        else -> {
-          contextual.add("Better not get splashed today. Grab an umbrella.")
-          contextual.add("free car wash outside rn.")
-          if (precipMm >= 2.0 || upcomingPrecipPeak >= 70) {
-            contextual.add("Harvest some rain water dude.")
-            contextual.add("socks are in grave danger today.")
-          }
-        }
-      }
-    }
-
-    // 5b. Windy / Gusty Conditions
-    if (windKmh >= 22.0 || forecast.windGustsKmh >= 36.0) {
-      contextual.add("walking against the wind = surprise leg day.")
-      contextual.add("nature's free blow-dry. messy hair unlocked.")
-      if (windKmh >= 35.0 || forecast.windGustsKmh >= 50.0) {
-        contextual.add("umbrella flip hazard: 100%. dont even try it.")
-      }
-    }
-
-    // 6. Location-Adaptive Daily Range, Diurnal Swing & Anomaly Tendencies
-    if (todaySwingC >= 12.0 || locationTypicalSwingC >= 12.0) {
-      if (tempPositionInDay <= 0.40 && tempC <= 16.5 && todayMaxC >= 20.5) {
-        contextual.add(
-          "Freezing start, warm afternoon—classic ${forecast.cityName} ${todaySwingC.roundToInt()}° swing. Layer up."
-        )
-        contextual.add("3 seasons in one day. pack a hoodie just in case.")
-      } else if (next6hTempDeltaC <= -5.5) {
-        contextual.add(
-          "Enjoy the warmth now—${forecast.cityName} drops ${abs(next6hTempDeltaC.roundToInt())}° fast after sundown."
-        )
-        contextual.add("3 seasons in one day. pack a hoodie just in case.")
-      } else if (todaySwingC >= 12.0) {
-        contextual.add(
-          "${forecast.cityName} woke up at ${todayMinC.roundToInt()}° and hits ${todayMaxC.roundToInt()}° today. Respect the range."
-        )
-        contextual.add("3 seasons in one day. pack a hoodie just in case.")
-      }
-    } else if (forecast.daily.size >= 3 && locationTypicalSwingC in 0.5..5.5 && !isRainingNow) {
-      contextual.add(
-        "Locked around ${todayMinC.roundToInt()}°–${todayMaxC.roundToInt()}°. ${forecast.cityName} picked one temperature and committed."
-      )
-    }
-
-    if (forecast.daily.size >= 3) {
-      if (tempAnomalyC <= -4.5) {
-        contextual.add("Plot twist: noticeably colder than ${forecast.cityName} usually runs this week.")
-      } else if (tempAnomalyC >= 4.5 && tempC >= 20.0) {
-        contextual.add("Unusually warm for ${forecast.cityName} today. Sky switched teams.")
-      }
-    }
-
-    // 7. Cloudy / Overcast / Gloomy Skies
-    if (
-      condition == WeatherConditionType.OVERCAST ||
-        condition == WeatherConditionType.FOG ||
-        isRainingNow ||
-        cloudCover >= 75
-    ) {
-      contextual.add("Bit sad today.")
-      contextual.add("Bro, see the stars today. ps. You can't.")
-    } else if (condition == WeatherConditionType.PARTLY_CLOUDY || cloudCover >= 45) {
-      contextual.add("Bro, see the stars today. ps. You can't.")
-    }
-
-    // 8. Breezy & Comfortable Stroll
-    if (
-      tempC in 16.0..26.5 &&
-        effectiveApparentC in 16.0..27.0 &&
-        windKmh in 10.0..32.0 &&
-        forecast.windGustsKmh < 45.0 &&
-        precipMm == 0.0 &&
-        (usAqi == null || usAqi <= 85)
-    ) {
-      contextual.add("bro take a stroll, breeze is goated.")
-    }
-
-    // 9. Ideal Goldilocks Weather
-    if (
-      tempC in 18.5..25.5 &&
-        effectiveApparentC in 18.0..26.0 &&
-        dewPointC <= 18.0 &&
-        precipMm == 0.0 &&
-        windKmh <= 26.0 &&
-        (usAqi == null || usAqi <= 75)
-    ) {
-      contextual.add("pleasantest weather.")
-      contextual.add("Earth, as intended")
-      contextual.add("no jacket, no sweat, no complaints. rare W.")
-      contextual.add("weather so good it feels suspicious.")
-      if (isDay && condition == WeatherConditionType.CLEAR_DAY) {
-        contextual.add("Bit sunny today. Nice weather ngl.")
-      } else {
-        contextual.add("Nice weather ngl.")
-      }
-    }
-
-    // 10. Cold Weather
-    if (tempC <= 12.0 && !isRainingNow) {
-      contextual.add("brrrrr, so coldddd.")
+    if (tempC <= 10.0 && !isRainingNow) {
+      prioritySpecific.add("Brrrrr, so cold! Certified hoodie weather.")
       if (tempC <= 2.0) {
-        contextual.add("leaving the bed today requires heroic bravery.")
-        contextual.add("my ears have left the chat.")
-      } else {
-        contextual.add("certified hoodie thief weather.")
-        contextual.add("cold enough to pretend your breath is dragon smoke.")
+        prioritySpecific.add("Why do we live where the air hurts our face?")
+        prioritySpecific.add("Leaving bed today requires heroic bravery.")
       }
     }
 
-    // 11. Clear Clean-Air Secondary Line
-    if (cloudCover <= 25 && visibilityM >= 8000.0 && (usAqi == null || usAqi <= 50)) {
-      contextual.add("Look up, the stars are pretty")
+    if (windKmh >= 24.0 || forecast.windGustsKmh >= 38.0) {
+      prioritySpecific.add("Walking against the wind = surprise leg day.")
+      prioritySpecific.add("Nature's free blow-dry. Messy hair unlocked.")
+      if (forecast.windGustsKmh >= 48.0) {
+        prioritySpecific.add("Umbrella flip hazard: 100%. Don't even try it.")
+      }
     }
 
-    // Ultimate fallback if no bucket triggered
-    if (contextual.isEmpty()) {
-      contextual.add("Earth, as intended")
-      contextual.add("pleasantest weather.")
+    if (todaySwingC >= 11.0 || locationTypicalSwingC >= 11.0) {
+      prioritySpecific.add("Classic ${forecast.cityName} swing: ${todayMinC.roundToInt()}° to ${todayMaxC.roundToInt()}°. 3 seasons in one day.")
     }
 
-    // Build real online / meteorology fun fact
-    val factIdx =
-      abs(forecast.cityName.hashCode() + tempC.roundToInt() + seedOffset) %
-        fallbackMeteorologyFacts.size
+    if (!isDay && cloudCover <= 30 && visibilityM >= 8000.0 && (usAqi == null || usAqi <= 60)) {
+      prioritySpecific.add("Look up, the stars are pretty tonight.")
+      prioritySpecific.add("The moon is carrying the entire sky aesthetic.")
+    }
+
+    if (tempC in 18.0..25.0 && effectiveApparentC in 17.5..25.5 && precipMm == 0.0 && windKmh <= 24.0) {
+      prioritySpecific.add("Earth, as intended. Pleasantest weather.")
+      prioritySpecific.add("No jacket, no sweat, no complaints. Rare W for ${forecast.cityName}.")
+      prioritySpecific.add("Weather so good it feels suspicious.")
+    }
+
+    // Group 2: Meteorological Fun Facts
+    val factIdx = abs(forecast.cityName.hashCode() + tempC.roundToInt() + seedOffset) % fallbackMeteorologyFacts.size
     val chosenFact = onlineFunFact?.takeIf { it.isNotBlank() } ?: fallbackMeteorologyFacts[factIdx]
-    val funFactLine = "fun fact: $chosenFact"
+    val funFactLine = "Fun fact: $chosenFact"
 
-    // Weave contextual lines cleanly with live fun fact & friendly greeting
-    val result = mutableListOf<String>()
-    val ctxList = contextual.toList()
-    ctxList.forEachIndexed { idx, line ->
-      result.add(line)
-      if (idx == 0) {
-        result.add(funFactLine)
-      } else if (idx == 1) {
-        result.add("Are you opening this app to read what i wrote? awww <3")
-      } else if (idx == 2) {
-        result.add("Hello :)")
-      } else if (idx == 3) {
-        result.add("tapping the quote for another one? i got plenty :p")
-      }
-    }
-    if (funFactLine !in result) result.add(funFactLine)
-    if ("Are you opening this app to read what i wrote? awww <3" !in result) {
-      result.add("Are you opening this app to read what i wrote? awww <3")
-    }
-    if ("Hello :)" !in result) result.add("Hello :)")
+    // Group 3: Humorous and quirky remarks that smartly reference the weather
+    val generalQuirks = listOf(
+      "Why are you reading this? Go touch grass.",
+      "Did you know that clouds are just really lazy fog?",
+      "Weather forecast: 100% chance of things happening.",
+      "Are you opening this app just to read what I wrote? Awww <3",
+      LocalizedStrings.quipHello(lang),
+      "Manifesting a clear sky for you. Results may vary.",
+      "Current mood: mostly cloudy with a chance of snacks.",
+      "Barometer: checking pressure. Me: also under pressure.",
+      "If you stand still enough in this weather, you become street architecture."
+    )
 
-    return result
+    // Blend smartly:
+    // If we have acute conditions, rotate them by city seed so different cities have a distinct
+    // starting acute observation, but ALWAYS starting with acute conditions!
+    val result = LinkedHashSet<String>()
+    val citySeed = abs(forecast.cityName.hashCode() + (todayMinC * 10).roundToInt() + (tempC * 5).roundToInt())
+
+    if (prioritySpecific.isNotEmpty()) {
+      val rotateOffset = citySeed % prioritySpecific.size
+      val rotatedSpecific = prioritySpecific.drop(rotateOffset) + prioritySpecific.take(rotateOffset)
+      
+      // First 2: Genuine acute condition matches for this specific location
+      rotatedSpecific.take(2).forEach { result.add(it) }
+      // Then fun fact
+      result.add(funFactLine)
+      // Then remaining acute conditions
+      rotatedSpecific.drop(2).forEach { result.add(it) }
+      // Then quirky remarks
+      val quirkRotate = (citySeed / 3) % generalQuirks.size
+      val rotatedQuirks = generalQuirks.drop(quirkRotate) + generalQuirks.take(quirkRotate)
+      rotatedQuirks.forEach { result.add(it) }
+    } else {
+      // Mild baseline weather: Lead with pleasant/mild quips, then fun fact, then quirks
+      result.add(LocalizedStrings.quipHello(lang))
+      result.add("Earth, as intended. Pleasantest weather.")
+      result.add(funFactLine)
+      val quirkRotate = citySeed % generalQuirks.size
+      val rotatedQuirks = generalQuirks.drop(quirkRotate) + generalQuirks.take(quirkRotate)
+      rotatedQuirks.forEach { result.add(it) }
+    }
+
+    return result.toList()
   }
 
   /**
    * Selects the active hero weather line for the current forecast, preview hour, and cycle offset.
+   * At quipCycleOffset = 0, every station displays its #1 acute meteorological observation.
+   * Tapping cycles sequentially through the rest of the station's tailored pool.
    */
   fun selectActiveQuip(
     forecast: WeatherForecast,
     selectedHourIndex: Int? = null,
     onlineFunFact: String? = null,
     quipCycleOffset: Int = 0,
+    lang: AppLanguage = AppLanguage.ENGLISH
   ): String {
-    val pool = buildQuipPool(forecast, selectedHourIndex, onlineFunFact, quipCycleOffset)
-    if (pool.isEmpty()) return "Hello :)"
+    val pool = buildQuipPool(forecast, selectedHourIndex, onlineFunFact, quipCycleOffset, lang)
+    if (pool.isEmpty()) return LocalizedStrings.quipHello(lang)
+    
     val index = ((quipCycleOffset % pool.size) + pool.size) % pool.size
     return pool[index]
   }

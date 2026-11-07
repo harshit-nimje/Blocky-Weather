@@ -116,7 +116,10 @@ import com.example.ui.components.BlockyRealFeelVisual
 import com.example.ui.components.BlockySmallIcon
 import com.example.ui.components.BlockySolarBowlVisual
 import com.example.ui.components.BlockyUvMeterVisual
+import com.example.ui.components.BlockyVisibilityVisual
+import com.example.ui.components.BlockyMoonPhaseVisual
 import com.example.ui.components.BlockyWeatherIcon
+import com.example.ui.components.BlockyWeeklyTrendVisual
 import com.example.ui.components.BlockyWindCompassVisual
 import com.example.ui.components.BlockyWordStaggerText
 import com.example.ui.components.PixelBlockContainer
@@ -130,6 +133,8 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 import com.example.ui.components.BlockySevereAlertOverlay
+import com.example.util.AppLanguage
+import com.example.util.LocalizedStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,6 +159,9 @@ fun WeatherDashboardScreen(
   val useFahrenheit = uiState.settings.useFahrenheit
   val ecoMode = uiState.settings.ecoGridMode
   val showHeroNudges = uiState.settings.showHeroNudges
+  val resolvedLang = remember(uiState.settings.appLanguage) {
+    AppLanguage.resolveEffectiveLanguage(uiState.settings.appLanguage)
+  }
 
   val isPullRefreshing = uiState.isSyncing && forecast != null
   val pullToRefreshState = rememberPullToRefreshState()
@@ -188,6 +196,7 @@ fun WeatherDashboardScreen(
           isSyncing = uiState.isSyncing,
           forecast = forecast,
           useFahrenheit = useFahrenheit,
+          lang = resolvedLang,
           onOpenStations = onOpenStationSheet,
           onOpenSettings = onOpenSettings,
           modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
@@ -266,6 +275,7 @@ fun WeatherDashboardScreen(
               pullFraction = pullFraction,
               isSyncing = isPullRefreshing,
               ecoMode = ecoMode,
+              lang = resolvedLang,
               modifier =
                 Modifier.align(Alignment.TopCenter)
                   .widthIn(max = 580.dp)
@@ -298,6 +308,7 @@ fun WeatherDashboardScreen(
                     useFahrenheit = useFahrenheit,
                     ecoMode = ecoMode,
                     showHeroNudges = showHeroNudges,
+                    lang = resolvedLang,
                     useStandardHeroFont = uiState.settings.useStandardHeroFont,
                     hasActiveSevereAlert = uiState.activeSevereAlert != null,
                     onlineFunFact = uiState.onlineFunFact,
@@ -312,6 +323,7 @@ fun WeatherDashboardScreen(
                     hourly = forecast.hourly,
                     selectedHourIndex = uiState.selectedHourIndex,
                     useFahrenheit = useFahrenheit,
+                    lang = resolvedLang,
                     onSelectHour = onSelectHour,
                     onClearSelectedHour = onClearSelectedHour,
                   )
@@ -332,6 +344,7 @@ fun WeatherDashboardScreen(
                     useFahrenheit = useFahrenheit,
                     columns = 3,
                     cardOrder = uiState.settings.atmosphericCardOrder,
+                    lang = resolvedLang,
                     expandedMetricTags = uiState.expandedMetricTags,
                     onToggleExpandMetric = onToggleExpandMetric,
                     onUpdateCardOrder = onUpdateAtmosphericCardOrder,
@@ -342,6 +355,7 @@ fun WeatherDashboardScreen(
                     daily = forecast.daily,
                     expandedDayIndex = uiState.expandedDayIndex,
                     useFahrenheit = useFahrenheit,
+                    lang = resolvedLang,
                     onToggleExpandDay = onToggleExpandDay,
                   )
                 }
@@ -369,6 +383,7 @@ fun WeatherDashboardScreen(
                   useFahrenheit = useFahrenheit,
                   ecoMode = ecoMode,
                   showHeroNudges = showHeroNudges,
+                  lang = resolvedLang,
                   useStandardHeroFont = uiState.settings.useStandardHeroFont,
                   hasActiveSevereAlert = uiState.activeSevereAlert != null,
                   onlineFunFact = uiState.onlineFunFact,
@@ -385,6 +400,7 @@ fun WeatherDashboardScreen(
                     hourly = forecast.hourly,
                     selectedHourIndex = uiState.selectedHourIndex,
                     useFahrenheit = useFahrenheit,
+                    lang = resolvedLang,
                     onSelectHour = onSelectHour,
                     onClearSelectedHour = onClearSelectedHour,
                   )
@@ -398,6 +414,7 @@ fun WeatherDashboardScreen(
                     useFahrenheit = useFahrenheit,
                     columns = if (isMediumGrid) 3 else 2,
                     cardOrder = uiState.settings.atmosphericCardOrder,
+                    lang = resolvedLang,
                     expandedMetricTags = uiState.expandedMetricTags,
                     onToggleExpandMetric = onToggleExpandMetric,
                     onUpdateCardOrder = onUpdateAtmosphericCardOrder,
@@ -411,6 +428,7 @@ fun WeatherDashboardScreen(
                     daily = forecast.daily,
                     expandedDayIndex = uiState.expandedDayIndex,
                     useFahrenheit = useFahrenheit,
+                    lang = resolvedLang,
                     onToggleExpandDay = onToggleExpandDay,
                   )
                 }
@@ -431,6 +449,7 @@ private fun CleanRoomTopBar(
   isSyncing: Boolean,
   forecast: WeatherForecast?,
   useFahrenheit: Boolean,
+  lang: AppLanguage,
   onOpenStations: () -> Unit,
   onOpenSettings: () -> Unit,
   modifier: Modifier = Modifier,
@@ -480,7 +499,7 @@ private fun CleanRoomTopBar(
           if (isOffline && fetchedAtMillis != null) {
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-              text = "· OFFLINE (${formatTimeShort(fetchedAtMillis)})",
+              text = "· ${LocalizedStrings.statusOffline(lang)} (${formatTimeShort(fetchedAtMillis)})",
               style = MaterialTheme.typography.labelSmall,
               color = tokens.inkMuted,
             )
@@ -501,16 +520,20 @@ private fun CleanRoomTopBar(
         modifier = Modifier.testTag("share_weather_button"),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 11.dp),
         onClick = {
-          val tempStr = "${forecast.currentTempC.toDisplayTemp(useFahrenheit)}°"
-          val feelsStr = "${forecast.apparentTempC.toDisplayTemp(useFahrenheit)}°"
-          val todayHighStr = "${forecast.daily.firstOrNull()?.tempMaxC?.toDisplayTemp(useFahrenheit) ?: "--"}°"
-          val todayLowStr = "${forecast.daily.firstOrNull()?.tempMinC?.toDisplayTemp(useFahrenheit) ?: "--"}°"
-          val quip = WeatherQuipEngine.selectActiveQuip(forecast)
-          val text = "BLOCKY WEATHER · ${forecast.cityName.uppercase(Locale.US)}\n" +
-              "Temp: $tempStr (Feels $feelsStr) · High: $todayHighStr / Low: $todayLowStr\n" +
-              "Condition: ${forecast.conditionLabel} · Wind: ${forecast.windSpeedKmh.roundToInt()} km/h\n" +
-              "AQI: ${forecast.usAqi ?: "--"} · UV: ${forecast.uvIndex}\n" +
-              "\"$quip\""
+          val highT = forecast.daily.firstOrNull()?.tempMaxC?.toDisplayTemp(useFahrenheit) ?: "--"
+          val lowT = forecast.daily.firstOrNull()?.tempMinC?.toDisplayTemp(useFahrenheit) ?: "--"
+          val text = LocalizedStrings.shareTemplate(
+            city = forecast.cityName,
+            temp = "${forecast.currentTempC.toDisplayTemp(useFahrenheit)}°",
+            feels = "${forecast.apparentTempC.toDisplayTemp(useFahrenheit)}°",
+            high = "$highT°",
+            low = "$lowT°",
+            cond = LocalizedStrings.conditionLabel(forecast.condition.displayTitle, lang),
+            wind = "${forecast.windSpeedKmh.roundToInt()} km/h",
+            aqi = "${forecast.usAqi ?: "--"}",
+            uv = "${forecast.uvIndex}",
+            lang = lang
+          )
 
           val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
           val clip = android.content.ClipData.newPlainText("Blocky Weather", text)
@@ -526,7 +549,7 @@ private fun CleanRoomTopBar(
         },
       ) {
         Text(
-          text = "SHARE ↗",
+          text = LocalizedStrings.actionShare(lang),
           style = MaterialTheme.typography.labelSmall,
           fontWeight = FontWeight.Bold,
           color = tokens.accentPrimary,
@@ -552,7 +575,7 @@ private fun CleanRoomTopBar(
           size = 18.dp,
         )
         Text(
-          text = "SETTINGS",
+          text = LocalizedStrings.actionSettings(lang),
           style = MaterialTheme.typography.labelSmall,
           fontWeight = FontWeight.Bold,
           color = tokens.inkPrimary,
@@ -571,6 +594,7 @@ private fun BlockyPullRefreshBanner(
   pullFraction: Float,
   isSyncing: Boolean,
   ecoMode: Boolean,
+  lang: AppLanguage,
   modifier: Modifier = Modifier,
 ) {
   val tokens = LocalGridcastTokens.current
@@ -663,9 +687,9 @@ private fun BlockyPullRefreshBanner(
       Text(
         text =
           when {
-            isSyncing -> "SYNCING TELEMETRY..."
-            isReadyToRelease -> "RELEASE TO SYNC [↓]"
-            else -> "PULL TO SYNC · ${(effectiveFraction * 100).roundToInt().coerceIn(0, 99)}%"
+            isSyncing -> LocalizedStrings.statusSyncing(lang)
+            isReadyToRelease -> LocalizedStrings.actionReleaseToSync(lang)
+            else -> "${LocalizedStrings.actionPullToSync(lang)} · ${(effectiveFraction * 100).roundToInt().coerceIn(0, 99)}%"
           },
         style =
           MaterialTheme.typography.labelSmall.copy(
@@ -689,6 +713,7 @@ private fun HeroArchitecturalSection(
   useFahrenheit: Boolean,
   ecoMode: Boolean,
   showHeroNudges: Boolean,
+  lang: AppLanguage,
   useStandardHeroFont: Boolean = false,
   hasActiveSevereAlert: Boolean = false,
   onlineFunFact: String?,
@@ -712,16 +737,19 @@ private fun HeroArchitecturalSection(
   val feelsTemp = forecast.apparentTempC.toDisplayTemp(useFahrenheit)
   val unitLabel = if (useFahrenheit) "F" else "C"
 
-  val displayConditionLabel =
-    selectedHour?.condition?.displayTitle ?: forecast.conditionLabel
+  val displayConditionLabel = LocalizedStrings.conditionLabel(
+    selectedHour?.condition?.displayTitle ?: forecast.conditionLabel,
+    lang
+  )
 
   val weatherQuip =
-    remember(forecast, selectedHourIndex, onlineFunFact, quipCycleOffset) {
+    remember(forecast, selectedHourIndex, onlineFunFact, quipCycleOffset, lang) {
       WeatherQuipEngine.selectActiveQuip(
         forecast = forecast,
         selectedHourIndex = selectedHourIndex,
         onlineFunFact = onlineFunFact,
         quipCycleOffset = quipCycleOffset,
+        lang = lang
       )
     }
 
@@ -802,41 +830,64 @@ private fun HeroArchitecturalSection(
       verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
       if (showHeroNudges && !hasActiveSevereAlert) {
-        Row(
-          modifier =
-            Modifier.fillMaxWidth()
-              .testTag("hero_weather_quip")
-              .clickable(onClick = onCycleQuip)
-              .padding(vertical = 2.dp),
-          verticalAlignment = Alignment.Top,
-          horizontalArrangement = Arrangement.SpaceBetween,
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp)
         ) {
-          BlockyWordStaggerText(
-            text = weatherQuip,
-            style =
-              MaterialTheme.typography.labelMedium.copy(
-                fontFamily = SilkscreenFontFamily,
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-              ),
-            color = tokens.inkPrimary,
-            modifier = Modifier.weight(1f).padding(end = 8.dp),
+          // Artistic/Blocky double-border effect
+          Box(
+            modifier = Modifier
+              .matchParentSize()
+              .offset(x = 2.dp, y = 2.dp)
+              .border(1.dp, tokens.gridBorder.copy(alpha = 0.5f))
           )
-          Text(
-            text = "[↻]",
-            style = MaterialTheme.typography.labelSmall,
-            color = tokens.inkMuted,
-          )
+          Row(
+            modifier =
+              Modifier.fillMaxWidth()
+                .testTag("hero_weather_quip")
+                .background(tokens.surfaceElevated)
+                .border(1.dp, tokens.gridBorderStrong)
+                .clickable(onClick = onCycleQuip)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            BlockyWordStaggerText(
+              text = weatherQuip,
+              style =
+                MaterialTheme.typography.labelMedium.copy(
+                  fontFamily = SilkscreenFontFamily,
+                  fontSize = 12.sp,
+                  lineHeight = 18.sp,
+                ),
+              color = tokens.inkPrimary,
+              modifier = Modifier.weight(1f).padding(end = 8.dp),
+              reduceAnimations = false,
+            )
+            Text(
+              text = "[↻]",
+              style = MaterialTheme.typography.labelSmall,
+              color = tokens.inkMuted,
+            )
+          }
         }
       }
 
       val aqiSegment = forecast.usAqi?.let { " · AQI $it" }.orEmpty()
+      val feelsLabel = LocalizedStrings.labelFeels(lang)
+      val windLabel = LocalizedStrings.labelWind(lang)
+      val humLabel = LocalizedStrings.labelHumidityShort(lang)
+      
+      val previewLabel = LocalizedStrings.labelPreviewMode(lang)
+      val resetLabel = LocalizedStrings.labelResetToLive(lang)
+
       Text(
         text =
           if (selectedHour != null) {
-            "PREVIEW ${selectedHour.hourLabel} · TAP TO RESET TO LIVE"
+            "$previewLabel ${selectedHour.hourLabel} · $resetLabel"
           } else {
-            "FEELS $feelsTemp° · WIND ${forecast.windSpeedKmh.roundToInt()} KM/H ${forecast.windDirectionDeg.toCompassCardinal()} · HUM ${forecast.humidityPercent}%$aqiSegment"
+            "$feelsLabel $feelsTemp° · $windLabel ${forecast.windSpeedKmh.roundToInt()} KM/H ${forecast.windDirectionDeg.toCompassCardinal()} · $humLabel ${forecast.humidityPercent}%$aqiSegment"
           },
         style = MaterialTheme.typography.labelSmall,
         color = tokens.inkMuted,
@@ -853,6 +904,7 @@ private fun HourlyBlockTimelineSection(
   hourly: List<HourlyPoint>,
   selectedHourIndex: Int?,
   useFahrenheit: Boolean,
+  lang: AppLanguage,
   onSelectHour: (Int) -> Unit,
   onClearSelectedHour: () -> Unit,
 ) {
@@ -862,7 +914,7 @@ private fun HourlyBlockTimelineSection(
   val inspectedHour = selectedHourIndex?.let { hourly.getOrNull(it) }
 
   Column(modifier = Modifier.fillMaxWidth().testTag("hourly_forecast_strip")) {
-    SectionHeaderLabel(title = stringResource(R.string.section_hourly_timeline))
+    SectionHeaderLabel(title = LocalizedStrings.sectionHourlyTimeline(lang))
     Spacer(modifier = Modifier.height(8.dp))
 
     LazyRow(
@@ -884,7 +936,20 @@ private fun HourlyBlockTimelineSection(
               modifier = Modifier.fillMaxWidth(),
               horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-              Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(swatch))
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(4.dp)
+                  .background(
+                    when {
+                      point.uvIndex >= 10.0 -> Color(0xFFA855F7) // Extreme
+                      point.uvIndex >= 8.0 -> Color(0xFFEF4444) // Very High
+                      point.uvIndex >= 6.0 -> Color(0xFFF97316) // High
+                      point.uvIndex >= 3.0 -> Color(0xFFEAB308) // Moderate
+                      else -> Color(0xFF22C55E) // Low
+                    }
+                  )
+              )
 
               Column(
                 modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
@@ -895,6 +960,7 @@ private fun HourlyBlockTimelineSection(
                   text = point.hourLabel,
                   style = MaterialTheme.typography.labelSmall,
                   color = if (isSelected) tokens.heroBlockInk else tokens.inkMuted,
+                  maxLines = 1
                 )
 
                 BlockyWeatherIcon(
@@ -909,11 +975,19 @@ private fun HourlyBlockTimelineSection(
                   color = if (isSelected) tokens.heroBlockInk else tokens.inkPrimary,
                 )
 
-                Text(
-                  text = "${point.precipProbPercent}%",
-                  style = MaterialTheme.typography.labelSmall,
-                  color = if (isSelected) tokens.heroBlockInk.copy(alpha = 0.78f) else tokens.inkMuted,
-                )
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Box(modifier = Modifier.size(5.dp).background(
+                    if (isSelected) tokens.heroBlockInk.copy(alpha = 0.6f) else tokens.inkMuted.copy(alpha = 0.5f)
+                  ))
+                  Text(
+                    text = "${point.precipProbPercent}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) tokens.heroBlockInk.copy(alpha = 0.78f) else tokens.inkMuted,
+                  )
+                }
               }
             }
           }
@@ -1019,6 +1093,7 @@ private fun AtmosphericMatrixSection(
   useFahrenheit: Boolean,
   columns: Int,
   cardOrder: List<String>,
+  lang: AppLanguage,
   expandedMetricTags: Set<String>,
   onToggleExpandMetric: (String) -> Unit,
   onUpdateCardOrder: (List<String>) -> Unit,
@@ -1032,12 +1107,45 @@ private fun AtmosphericMatrixSection(
   val sunsetShort = todayDaily?.sunsetIso?.substringAfter('T', "18:00")?.take(5) ?: "18:00"
   val solarProgress = computeSolarProgress(todayDaily?.sunriseIso, todayDaily?.sunsetIso)
 
+  val lunarPhaseData = remember {
+    val synodicPeriodMs = 29.53058867 * 86400000.0
+    val epochNewMoonMs = 1704974220000L
+    val nowMs = System.currentTimeMillis()
+    val diffMs = (nowMs - epochNewMoonMs).coerceAtLeast(0L)
+    val cycleFraction = ((diffMs % synodicPeriodMs.toLong()) / synodicPeriodMs)
+    val ageDays = cycleFraction * 29.53058867
+    val illum = ((1.0 - kotlin.math.cos(cycleFraction * 2.0 * kotlin.math.PI)) / 2.0 * 100.0).roundToInt().coerceIn(0, 100)
+    val waxing = cycleFraction < 0.5
+    val (phaseKey, nextPhase, daysToNext) = when {
+      ageDays < 1.84 -> Triple("NEW MOON", "FIRST QUARTER", (7.38 - ageDays).coerceAtLeast(0.1))
+      ageDays < 5.53 -> Triple("WAXING CRESCENT", "FIRST QUARTER", (7.38 - ageDays).coerceAtLeast(0.1))
+      ageDays < 9.22 -> Triple("FIRST QUARTER", "FULL MOON", (14.77 - ageDays).coerceAtLeast(0.1))
+      ageDays < 12.92 -> Triple("WAXING GIBBOUS", "FULL MOON", (14.77 - ageDays).coerceAtLeast(0.1))
+      ageDays < 16.61 -> Triple("FULL MOON", "LAST QUARTER", (22.15 - ageDays).coerceAtLeast(0.1))
+      ageDays < 20.30 -> Triple("WANING GIBBOUS", "LAST QUARTER", (22.15 - ageDays).coerceAtLeast(0.1))
+      ageDays < 23.99 -> Triple("LAST QUARTER", "NEW MOON", (29.53 - ageDays).coerceAtLeast(0.1))
+      ageDays < 27.69 -> Triple("WANING CRESCENT", "NEW MOON", (29.53 - ageDays).coerceAtLeast(0.1))
+      else -> Triple("NEW MOON", "FIRST QUARTER", (29.53 - ageDays + 7.38))
+    }
+    object {
+      val phase = phaseKey
+      val illumination = illum
+      val isWaxing = waxing
+      val age = ((ageDays * 10).roundToInt() / 10.0)
+      val daysNext = ((daysToNext * 10).roundToInt() / 10.0)
+      val next = nextPhase
+    }
+  }
+
+  val localizedMoonPhase = LocalizedStrings.moonPhaseName(lunarPhaseData.phase, lang)
+  val localizedNextMoonPhase = LocalizedStrings.moonPhaseName(lunarPhaseData.next, lang)
+
   val rawCards =
     listOf(
       MetricCardData(
         tag = "metric_real_feel",
         icon = BlockyMetricIcon.REAL_FEEL,
-        title = stringResource(R.string.metric_real_feel),
+        title = LocalizedStrings.metricRealFeel(lang),
         primaryValue = "${forecast.apparentTempC.toDisplayTemp(useFahrenheit)}°",
         secondaryDetail = "Actual ${forecast.currentTempC.toDisplayTemp(useFahrenheit)}° · Dew ${forecast.dewPointC.toDisplayTemp(useFahrenheit)}°",
         ratio = ((forecast.apparentTempC + 10.0) / 50.0).toFloat().coerceIn(0.1f, 1f),
@@ -1059,7 +1167,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_aqi",
         icon = BlockyMetricIcon.AQI,
-        title = stringResource(R.string.metric_aqi),
+        title = LocalizedStrings.metricAqi(lang),
         primaryValue = "AQI ${forecast.usAqi ?: 25}",
         secondaryDetail =
           "${aqiStatusLabel(forecast.usAqi ?: 25)} · PM2.5 ${forecast.pm25?.let { String.format(Locale.US, "%.1f", it) } ?: "8.0"}",
@@ -1080,7 +1188,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_wind",
         icon = BlockyMetricIcon.WIND,
-        title = stringResource(R.string.metric_wind),
+        title = LocalizedStrings.metricWind(lang),
         primaryValue = "${forecast.windSpeedKmh.roundToInt()} km/h",
         secondaryDetail =
           "${forecast.windDirectionDeg.toCompassCardinal()} · Gust ${forecast.windGustsKmh.roundToInt()}",
@@ -1102,7 +1210,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_humidity",
         icon = BlockyMetricIcon.HUMIDITY,
-        title = stringResource(R.string.metric_humidity),
+        title = LocalizedStrings.metricHumidity(lang),
         primaryValue = "${forecast.humidityPercent}%",
         secondaryDetail = "Dew ${forecast.dewPointC.toDisplayTemp(useFahrenheit)}°",
         ratio = (forecast.humidityPercent / 100f).coerceIn(0.06f, 1f),
@@ -1119,7 +1227,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_uv",
         icon = BlockyMetricIcon.UV,
-        title = stringResource(R.string.metric_uv),
+        title = LocalizedStrings.metricUv(lang),
         primaryValue = "UV ${forecast.uvIndex.roundToInt()}",
         secondaryDetail = "${uvCategoryLabel(forecast.uvIndex)} · Cloud ${forecast.cloudCoverPercent}%",
         ratio = (forecast.uvIndex / 11.0).toFloat().coerceIn(0.08f, 1f),
@@ -1136,7 +1244,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_pressure",
         icon = BlockyMetricIcon.PRESSURE,
-        title = stringResource(R.string.metric_pressure),
+        title = LocalizedStrings.metricPressure(lang),
         primaryValue = "${forecast.pressureHpa.roundToInt()} hPa",
         secondaryDetail = "Vis ${(forecast.visibilityMeters / 1000.0).roundToInt()} km",
         ratio = ((forecast.pressureHpa - 975.0) / 65.0).toFloat().coerceIn(0.1f, 1f),
@@ -1153,7 +1261,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_precipitation",
         icon = BlockyMetricIcon.PRECIPITATION,
-        title = stringResource(R.string.metric_precipitation),
+        title = LocalizedStrings.metricPrecipitation(lang),
         primaryValue = String.format(Locale.US, "%.1f mm", forecast.precipitationMm),
         secondaryDetail = "24h peak $next24PrecipPeak%",
         ratio = (next24PrecipPeak / 100f).coerceIn(0.06f, 1f),
@@ -1170,7 +1278,7 @@ private fun AtmosphericMatrixSection(
       MetricCardData(
         tag = "metric_solar",
         icon = BlockyMetricIcon.SOLAR,
-        title = stringResource(R.string.metric_daylight),
+        title = LocalizedStrings.metricSolar(lang),
         primaryValue = "$sunriseShort–$sunsetShort",
         secondaryDetail = "${(solarProgress * 100).roundToInt()}% elapsed",
         ratio = solarProgress.coerceIn(0.08f, 1f),
@@ -1189,6 +1297,47 @@ private fun AtmosphericMatrixSection(
             "DAYLIGHT" to "${(solarProgress * 100).roundToInt()}% complete",
           ),
       ),
+      MetricCardData(
+        tag = "metric_visibility",
+        icon = BlockyMetricIcon.UV,
+        title = LocalizedStrings.metricVisibility(lang),
+        primaryValue = String.format(Locale.US, "%.1f km", forecast.visibilityMeters / 1000.0),
+        secondaryDetail = "Atmospheric clarity",
+        ratio = ((forecast.visibilityMeters / 1000.0) / 20.0).toFloat().coerceIn(0.05f, 1f),
+        expandedVisual = {
+          BlockyVisibilityVisual(visibilityMeters = forecast.visibilityMeters)
+        },
+        expandedFacts =
+          listOf(
+            "DISTANCE" to String.format(Locale.US, "%.1f km", forecast.visibilityMeters / 1000.0),
+            "CLARITY" to if (forecast.visibilityMeters >= 10000.0) "High · Unrestricted" else "Haze / Mist",
+            "STATUS" to "Optical Clarity",
+          ),
+      ),
+      MetricCardData(
+        tag = "metric_moon_phase",
+        icon = BlockyMetricIcon.MOON_THEME,
+        title = LocalizedStrings.metricMoonPhase(lang),
+        primaryValue = localizedMoonPhase,
+        secondaryDetail = "${lunarPhaseData.illumination}% · Day ${lunarPhaseData.age} / 29.5",
+        ratio = (lunarPhaseData.illumination / 100f).coerceIn(0.05f, 1f),
+        expandedVisual = {
+          BlockyMoonPhaseVisual(
+            illuminationPercent = lunarPhaseData.illumination,
+            phaseName = localizedMoonPhase,
+            isWaxing = lunarPhaseData.isWaxing,
+            lunarAgeDays = lunarPhaseData.age,
+            daysToNextPhase = lunarPhaseData.daysNext,
+            nextPhaseName = localizedNextMoonPhase,
+          )
+        },
+        expandedFacts =
+          listOf(
+            "PHASE" to localizedMoonPhase,
+            "ILLUMINATION" to "${lunarPhaseData.illumination}%",
+            "CYCLE" to "Day ${lunarPhaseData.age} / 29.5",
+          ),
+      ),
     )
 
   val cardsByTag = rawCards.associateBy { it.tag }
@@ -1202,8 +1351,8 @@ private fun AtmosphericMatrixSection(
 
   Column(modifier = Modifier.fillMaxWidth()) {
     SectionHeaderLabel(
-      title = stringResource(R.string.section_atmospheric_matrix),
-      trailingHint = if (draggingTag != null) "DROP IN SLOT" else "HOLD & DRAG",
+      title = LocalizedStrings.sectionAtmosphericMatrix(lang),
+      trailingHint = if (draggingTag != null) LocalizedStrings.dragHintDrop(lang) else LocalizedStrings.dragHintHold(lang),
     )
     Spacer(modifier = Modifier.height(10.dp))
 
@@ -1530,12 +1679,10 @@ private fun AtmosphericMatrixSection(
                           tint = if (isDragged) tokens.accentPrimary else tokens.inkSecondary,
                           size = 15.dp,
                         )
-                        Text(
+                        com.example.ui.components.BlockyMarqueeText(
                           text = card.title,
                           style = MaterialTheme.typography.labelSmall,
                           color = if (isDragged) tokens.inkPrimary else tokens.inkMuted,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis,
                         )
                       }
                       Row(
@@ -1552,21 +1699,16 @@ private fun AtmosphericMatrixSection(
                       }
                     }
 
-                    Text(
+                    com.example.ui.components.BlockyMarqueeText(
                       text = card.primaryValue,
-                      style = MaterialTheme.typography.headlineMedium,
-                      fontWeight = FontWeight.Bold,
-                      color = tokens.inkPrimary,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis,
+                      style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                      color = tokens.inkPrimary
                     )
 
-                    Text(
+                    com.example.ui.components.BlockyMarqueeText(
                       text = card.secondaryDetail,
                       style = MaterialTheme.typography.bodySmall,
-                      color = tokens.inkSecondary,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis,
+                      color = tokens.inkSecondary
                     )
                   }
                 }
@@ -1695,6 +1837,7 @@ private fun WeeklyArchitecturalReportSection(
   daily: List<DailyPoint>,
   expandedDayIndex: Int?,
   useFahrenheit: Boolean,
+  lang: AppLanguage,
   onToggleExpandDay: (Int) -> Unit,
 ) {
   val tokens = LocalGridcastTokens.current
@@ -1704,7 +1847,7 @@ private fun WeeklyArchitecturalReportSection(
   val weekMaxC = daily.maxOf { it.tempMaxC }
 
   Column(modifier = Modifier.fillMaxWidth().testTag("daily_forecast_list")) {
-    SectionHeaderLabel(title = stringResource(R.string.section_weekly_report))
+    SectionHeaderLabel(title = LocalizedStrings.sectionWeeklyReport(lang))
     Spacer(modifier = Modifier.height(10.dp))
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1809,37 +1952,45 @@ private fun WeeklyArchitecturalReportSection(
                       .padding(10.dp),
                   verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                  BlockySolarBowlVisual(
-                    solarProgress = daySolarProgress,
-                    isDay = true,
-                    sunriseLabel = daySunrise,
-                    sunsetLabel = daySunset,
+                  com.example.ui.components.BlockyDayMiniReport(
+                    day = day,
+                    useFahrenheit = useFahrenheit,
+                    lang = lang,
+                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
                   )
-                  BlockyCompactUvStrip(uvIndex = day.uvMax)
                   Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .border(1.dp, tokens.gridBorder)
+                      .background(tokens.surfaceElevated)
+                      .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                   ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                      DayDetailStat(
-                        label = "FEELS RANGE",
-                        value =
-                          "${day.apparentMinC.toDisplayTemp(useFahrenheit)}°..${day.apparentMaxC.toDisplayTemp(useFahrenheit)}°",
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                      BlockySmallIcon(
+                        kind = BlockyMetricIcon.SOLAR,
+                        tint = tokens.accentPrimary,
+                        size = 12.dp,
+                      )
+                      Text(
+                        text = "SUNRISE $daySunrise · SUNSET $daySunset",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = tokens.inkSecondary,
                       )
                     }
-                    Box(modifier = Modifier.weight(1f)) {
-                      DayDetailStat(
-                        label = "PRECIP",
-                        value =
-                          "${day.precipProbMaxPercent}% · ${String.format(Locale.US, "%.1f", day.precipSumMm)}mm",
-                      )
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                      DayDetailStat(
-                        label = "MAX WIND",
-                        value = "${day.windMaxKmh.roundToInt()} km/h",
-                      )
-                    }
+                    Text(
+                      text = "FEELS ${day.apparentMinC.toDisplayTemp(useFahrenheit)}°..${day.apparentMaxC.toDisplayTemp(useFahrenheit)}°",
+                      style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = SilkscreenFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                      ),
+                      color = tokens.accentPrimary,
+                    )
                   }
                 }
               }
@@ -1862,13 +2013,10 @@ private fun DayDetailStat(label: String, value: String) {
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
     )
-    Text(
+    com.example.ui.components.BlockyMarqueeText(
       text = value,
-      style = MaterialTheme.typography.bodySmall,
-      fontWeight = FontWeight.Bold,
-      color = tokens.inkPrimary,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
+      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+      color = tokens.inkPrimary
     )
   }
 }

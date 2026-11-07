@@ -552,6 +552,8 @@ class ExampleUnitTest {
         "metric_pressure",
         "metric_precipitation",
         "metric_solar",
+        "metric_visibility",
+        "metric_moon_phase",
       ),
       movedForward,
     )
@@ -572,6 +574,8 @@ class ExampleUnitTest {
         "metric_pressure",
         "metric_precipitation",
         "metric_solar",
+        "metric_visibility",
+        "metric_moon_phase",
       ),
       movedBackward,
     )

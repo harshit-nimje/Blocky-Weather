@@ -2,20 +2,28 @@ package com.example.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.floor
 import kotlinx.coroutines.delay
@@ -126,5 +134,50 @@ fun BlockyWordStaggerText(
         }
       }
     }
+  }
+}
+
+/**
+ * Auto-scrolling marquee text for handling long strings without clipping.
+ */
+@Composable
+fun BlockyMarqueeText(
+  text: String,
+  style: TextStyle,
+  color: Color,
+  modifier: Modifier = Modifier,
+  delayMillis: Int = 2000
+) {
+  val scrollState = androidx.compose.foundation.rememberScrollState()
+  var shouldAnimate by remember { mutableStateOf(true) }
+
+  LaunchedEffect(text, shouldAnimate) {
+    if (shouldAnimate) {
+      while (true) {
+        delay(delayMillis.toLong())
+        scrollState.animateScrollTo(
+          scrollState.maxValue,
+          animationSpec = tween(durationMillis = scrollState.maxValue * 15, easing = LinearEasing)
+        )
+        delay(delayMillis.toLong())
+        scrollState.scrollTo(0)
+      }
+    }
+  }
+
+  androidx.compose.foundation.layout.Row(
+    modifier = modifier
+      .horizontalScroll(scrollState, enabled = false)
+  ) {
+    Text(
+      text = text,
+      style = style,
+      color = color,
+      maxLines = 1,
+      overflow = TextOverflow.Visible,
+      modifier = Modifier.onSizeChanged { 
+        shouldAnimate = scrollState.maxValue > 0
+      }
+    )
   }
 }

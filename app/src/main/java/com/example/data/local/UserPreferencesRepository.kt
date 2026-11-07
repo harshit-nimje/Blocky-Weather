@@ -47,6 +47,8 @@ val DEFAULT_ATMOSPHERIC_CARD_ORDER: List<String> =
     "metric_pressure",
     "metric_precipitation",
     "metric_solar",
+    "metric_visibility",
+    "metric_moon_phase",
   )
 
 internal fun normalizeAtmosphericCardOrder(order: List<String>): List<String> {

@@ -79,6 +79,7 @@ fun StationSelectorSheet(
   isSearching: Boolean,
   isLocating: Boolean,
   useFahrenheit: Boolean,
+  lang: com.example.util.AppLanguage,
   statusBanner: String?,
   hasCoarseLocationPermission: () -> Boolean,
   onUseCoarseLocation: () -> Unit,
@@ -324,7 +325,7 @@ fun StationSelectorSheet(
                   )
                 }
                 Text(
-                  text = "+ ADD GRID",
+                  text = com.example.util.LocalizedStrings.actionAddGrid(lang),
                   style = MaterialTheme.typography.labelSmall,
                   color = tokens.accentPrimary,
                 )
@@ -376,7 +377,7 @@ fun StationSelectorSheet(
                     if (station.hasOfflineCache) {
                       Spacer(modifier = Modifier.width(8.dp))
                       Text(
-                        text = "CACHED",
+                        text = com.example.util.LocalizedStrings.statusCached(lang),
                         style = MaterialTheme.typography.labelSmall,
                         color = tokens.accentPrimary,
                         modifier =
@@ -392,7 +393,7 @@ fun StationSelectorSheet(
                       )
                       .joinToString(" · ")
                   Text(
-                    text = formatSyncSubtitle(sub, station.lastUpdatedMillis),
+                    text = formatSyncSubtitle(sub, station.lastUpdatedMillis, lang),
                     style = MaterialTheme.typography.bodySmall,
                     color = tokens.inkMuted,
                     maxLines = 1,
@@ -410,7 +411,7 @@ fun StationSelectorSheet(
                     color = if (isSelected) tokens.accentPrimary else tokens.inkPrimary,
                   )
                 }
-                if (!station.isPinned && savedStations.size > 1) {
+                if (savedStations.size > 1) {
                   Spacer(modifier = Modifier.width(4.dp))
                   IconButton(
                     onClick = { onDeleteStation(station.id) },
@@ -435,14 +436,14 @@ fun StationSelectorSheet(
   }
 }
 
-private fun formatSyncSubtitle(region: String, updatedMillis: Long?): String {
+private fun formatSyncSubtitle(region: String, updatedMillis: Long?, lang: com.example.util.AppLanguage): String {
   if (updatedMillis == null) return region
   val minsAgo = ((System.currentTimeMillis() - updatedMillis) / 60_000L).coerceAtLeast(0L)
   val ageLabel =
     when {
-      minsAgo < 1L -> "JUST NOW"
-      minsAgo < 60L -> "${minsAgo}M AGO"
-      else -> "${minsAgo / 60L}H AGO"
+      minsAgo < 1L -> com.example.util.LocalizedStrings.timeJustNow(lang)
+      minsAgo < 60L -> com.example.util.LocalizedStrings.timeMinsAgo(minsAgo, lang)
+      else -> com.example.util.LocalizedStrings.timeHoursAgo(minsAgo / 60L, lang)
     }
   return "$region · $ageLabel"
 }

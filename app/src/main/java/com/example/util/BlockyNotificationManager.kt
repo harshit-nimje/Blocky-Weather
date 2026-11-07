@@ -101,9 +101,9 @@ object BlockyNotificationManager {
     val lowStr = today?.let { "${it.tempMinC.toDisplayTemp(settings.useFahrenheit)}°" } ?: "--"
 
     val title = "${forecast.cityName.uppercase()} · $currentTempStr ${forecast.condition.displayTitle}"
-    val shortContent = "$quipText | H: $highStr  L: $lowStr"
+    val shortContent = "High: $highStr · Low: $lowStr · Feels $feelsStr"
     val expandedContent =
-      "Feels $feelsStr · AQI ${forecast.usAqi ?: 25} · Wind ${forecast.windSpeedKmh.roundToInt()} km/h · Hum ${forecast.humidityPercent}%\n$quipText"
+      "Feels $feelsStr · AQI ${forecast.usAqi ?: 25} · Wind ${forecast.windSpeedKmh.roundToInt()} km/h · Hum ${forecast.humidityPercent}% · Barometer ${forecast.pressureHpa.roundToInt()} hPa"
 
     val notification =
       NotificationCompat.Builder(context, CHANNEL_PINNED_ID)

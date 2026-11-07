@@ -424,6 +424,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
           isSearching = uiState.isSearching,
           isLocating = uiState.isLocating,
           useFahrenheit = uiState.settings.useFahrenheit,
+          lang = com.example.util.AppLanguage.resolveEffectiveLanguage(uiState.settings.appLanguage),
           statusBanner = uiState.statusBanner,
           hasCoarseLocationPermission = { viewModel.hasCoarseLocationPermission() },
           onUseCoarseLocation = { viewModel.useCurrentCoarseLocation() },
