@@ -878,37 +878,37 @@ object LocalizedStrings {
     val upper = phaseKey.uppercase()
     return when (lang) {
       AppLanguage.SPANISH -> when {
-        "NEW" in upper -> "LUNA NUEVA"
-        "WAXING CRESCENT" in upper -> "CRECIENTE"
-        "FIRST QUARTER" in upper -> "CUARTO CRECIENTE"
-        "WAXING GIBBOUS" in upper -> "GIBOSA CRECIENTE"
-        "FULL" in upper -> "LUNA LLENA"
-        "WANING GIBBOUS" in upper -> "GIBOSA MENGUANTE"
-        "LAST QUARTER" in upper -> "CUARTO MENGUANTE"
-        "WANING CRESCENT" in upper -> "MENGUANTE"
-        else -> upper
+        "NEW" in upper -> "Luna nueva"
+        "WAXING CRESCENT" in upper -> "Creciente"
+        "FIRST QUARTER" in upper -> "Cuarto creciente"
+        "WAXING GIBBOUS" in upper -> "Gibosa creciente"
+        "FULL" in upper -> "Luna llena"
+        "WANING GIBBOUS" in upper -> "Gibosa menguante"
+        "LAST QUARTER" in upper -> "Cuarto menguante"
+        "WANING CRESCENT" in upper -> "Menguante"
+        else -> phaseKey
       }
       AppLanguage.FRENCH -> when {
-        "NEW" in upper -> "NOUVELLE LUNE"
-        "WAXING CRESCENT" in upper -> "PREMIER CROISSANT"
-        "FIRST QUARTER" in upper -> "PREMIER QUARTIER"
-        "WAXING GIBBOUS" in upper -> "GIBBEUSE CROISSANTE"
-        "FULL" in upper -> "PLEINE LUNE"
-        "WANING GIBBOUS" in upper -> "GIBBEUSE DÉCROISSANTE"
-        "LAST QUARTER" in upper -> "DERNIER QUARTIER"
-        "WANING CRESCENT" in upper -> "DERNIER CROISSANT"
-        else -> upper
+        "NEW" in upper -> "Nouvelle lune"
+        "WAXING CRESCENT" in upper -> "Premier croissant"
+        "FIRST QUARTER" in upper -> "Premier quartier"
+        "WAXING GIBBOUS" in upper -> "Gibbeuse croissante"
+        "FULL" in upper -> "Pleine lune"
+        "WANING GIBBOUS" in upper -> "Gibbeuse décroissante"
+        "LAST QUARTER" in upper -> "Dernier quartier"
+        "WANING CRESCENT" in upper -> "Dernier croissant"
+        else -> phaseKey
       }
       AppLanguage.GERMAN -> when {
-        "NEW" in upper -> "NEUMOND"
-        "WAXING CRESCENT" in upper -> "ZUNEHMENDE SICHEL"
-        "FIRST QUARTER" in upper -> "ERSTES VIERTEL"
-        "WAXING GIBBOUS" in upper -> "ZUNEHMENDER MOND"
-        "FULL" in upper -> "VOLLMOND"
-        "WANING GIBBOUS" in upper -> "ABNEHMENDER MOND"
-        "LAST QUARTER" in upper -> "LETZTES VIERTEL"
-        "WANING CRESCENT" in upper -> "ABNEHMENDE SICHEL"
-        else -> upper
+        "NEW" in upper -> "Neumond"
+        "WAXING CRESCENT" in upper -> "Zunehmende Sichel"
+        "FIRST QUARTER" in upper -> "Erstes Viertel"
+        "WAXING GIBBOUS" in upper -> "Zunehmender Mond"
+        "FULL" in upper -> "Vollmond"
+        "WANING GIBBOUS" in upper -> "Abnehmender Mond"
+        "LAST QUARTER" in upper -> "Letztes Viertel"
+        "WANING CRESCENT" in upper -> "Abnehmende Sichel"
+        else -> phaseKey
       }
       AppLanguage.HINDI -> when {
         "NEW" in upper -> "अमावस्या"
@@ -919,7 +919,7 @@ object LocalizedStrings {
         "WANING GIBBOUS" in upper -> "कृष्ण पक्ष कुबड़ा"
         "LAST QUARTER" in upper -> "अंतिम चरण"
         "WANING CRESCENT" in upper -> "कृष्ण पक्ष अर्धचंद्र"
-        else -> upper
+        else -> phaseKey
       }
       AppLanguage.JAPANESE -> when {
         "NEW" in upper -> "新月"
@@ -930,7 +930,7 @@ object LocalizedStrings {
         "WANING GIBBOUS" in upper -> "十六夜月"
         "LAST QUARTER" in upper -> "下弦の月"
         "WANING CRESCENT" in upper -> "有明月"
-        else -> upper
+        else -> phaseKey
       }
       AppLanguage.CHINESE -> when {
         "NEW" in upper -> "新月"
@@ -941,9 +941,19 @@ object LocalizedStrings {
         "WANING GIBBOUS" in upper -> "亏凸月"
         "LAST QUARTER" in upper -> "下弦月"
         "WANING CRESCENT" in upper -> "残月"
-        else -> upper
+        else -> phaseKey
       }
-      else -> upper
+      else -> when {
+        "NEW" in upper -> "New Moon"
+        "WAXING CRESCENT" in upper -> "Waxing Crescent"
+        "FIRST QUARTER" in upper -> "First Quarter"
+        "WAXING GIBBOUS" in upper -> "Waxing Gibbous"
+        "FULL" in upper -> "Full Moon"
+        "WANING GIBBOUS" in upper -> "Waning Gibbous"
+        "LAST QUARTER" in upper -> "Last Quarter"
+        "WANING CRESCENT" in upper -> "Waning Crescent"
+        else -> phaseKey
+      }
     }
   }
 
@@ -975,5 +985,35 @@ object LocalizedStrings {
     AppLanguage.JAPANESE -> "安定度"
     AppLanguage.CHINESE -> "稳定性"
     else -> "STABILITY"
+  }
+
+  fun labelPrecipShort(lang: AppLanguage): String = when (lang) {
+    AppLanguage.SPANISH -> "PRECIP"
+    AppLanguage.FRENCH -> "PRÉCIP"
+    AppLanguage.GERMAN -> "REGEN"
+    AppLanguage.HINDI -> "वर्षा"
+    AppLanguage.JAPANESE -> "降水"
+    AppLanguage.CHINESE -> "降水"
+    else -> "PRECIP"
+  }
+
+  fun labelSwingShort(lang: AppLanguage): String = when (lang) {
+    AppLanguage.SPANISH -> "OSCIL."
+    AppLanguage.FRENCH -> "ÉCART"
+    AppLanguage.GERMAN -> "SCHWANK."
+    AppLanguage.HINDI -> "अंतर"
+    AppLanguage.JAPANESE -> "気温差"
+    AppLanguage.CHINESE -> "温差"
+    else -> "SWING"
+  }
+
+  fun labelUvShort(lang: AppLanguage): String = when (lang) {
+    AppLanguage.SPANISH -> "UV"
+    AppLanguage.FRENCH -> "UV"
+    AppLanguage.GERMAN -> "UV"
+    AppLanguage.HINDI -> "यूवी"
+    AppLanguage.JAPANESE -> "UV"
+    AppLanguage.CHINESE -> "UV"
+    else -> "UV"
   }
 }

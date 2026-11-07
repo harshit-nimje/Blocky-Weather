@@ -1310,11 +1310,11 @@ fun BlockyVisibilityVisual(
 @Composable
 fun BlockyMoonPhaseVisual(
   illuminationPercent: Int = 78,
-  phaseName: String = "WAXING GIBBOUS",
+  phaseName: String = "Waxing Gibbous",
   isWaxing: Boolean = true,
   lunarAgeDays: Double = 10.4,
   daysToNextPhase: Double = 4.3,
-  nextPhaseName: String = "FULL MOON",
+  nextPhaseName: String = "Full Moon",
   modifier: Modifier = Modifier,
 ) {
   val tokens = LocalGridcastTokens.current
@@ -1332,10 +1332,8 @@ fun BlockyMoonPhaseVisual(
 
   val interactionSource = remember { MutableInteractionSource() }
   val p = anim.value
-  val moonDeepDark = Color(0xFF0B1120)
+  val moonDeepDark = Color(0xFF0F172A)
   val moonShadow = Color(0xFF1E293B)
-  val moonMare = Color(0xFF334155)
-  val moonMareDark = Color(0xFF1E293B)
   val moonMid = Color(0xFF94A3B8)
   val moonBright = Color(0xFFE2E8F0)
   val moonPureWhite = Color(0xFFFFFFFF)
@@ -1352,20 +1350,20 @@ fun BlockyMoonPhaseVisual(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(16.dp),
   ) {
-    Canvas(modifier = Modifier.size(92.dp)) {
-      val grid = 23
+    Canvas(modifier = Modifier.size(88.dp)) {
+      val grid = 21
       val pitch = size.width / grid
       val px = pitch * 0.94f
       val pad = (pitch - px) * 0.5f
-      val center = 11f
-      val radius = 10.8f
+      val center = 10f
+      val radius = 9.8f
 
-      // Deep space celestial star speckles
+      // Subtle celestial stars
       val starCoords = listOf(
-        1 to 1, 21 to 2, 0 to 20, 21 to 21, 2 to 11, 20 to 12, 1 to 19, 21 to 5
+        1 to 1, 19 to 2, 0 to 19, 19 to 19, 2 to 10, 19 to 11
       )
       starCoords.forEach { (sc, sr) ->
-        val starA = ((p * 2f - 0.5f).coerceIn(0f, 1f)) * 0.65f
+        val starA = ((p * 2f - 0.5f).coerceIn(0f, 1f)) * 0.5f
         if (starA > 0.05f) {
           drawRect(
             color = Color.White.copy(alpha = starA),
@@ -1381,14 +1379,14 @@ fun BlockyMoonPhaseVisual(
           val dy = r - center
           val dist = kotlin.math.sqrt(dx * dx + dy * dy)
 
-          if (dist <= radius + 0.6f) {
-            val revealDelay = (dist / radius).coerceIn(0f, 1f) * 0.5f
-            val cellProgress = ((p * 1.5f - revealDelay) / 0.5f).coerceIn(0f, 1f)
+          if (dist <= radius + 0.5f) {
+            val revealDelay = (dist / radius).coerceIn(0f, 1f) * 0.4f
+            val cellProgress = ((p * 1.4f - revealDelay) / 0.6f).coerceIn(0f, 1f)
             if (cellProgress <= 0.02f) continue
 
             // Atmospheric corona / lunar halo ring
-            if (dist > radius - 0.2f && dist <= radius + 0.6f) {
-              val haloAlpha = 0.20f * cellProgress
+            if (dist > radius - 0.25f && dist <= radius + 0.5f) {
+              val haloAlpha = 0.18f * cellProgress
               drawRect(
                 color = moonAura.copy(alpha = haloAlpha),
                 topLeft = Offset(c * pitch + pad, r * pitch + pad),
@@ -1401,52 +1399,23 @@ fun BlockyMoonPhaseVisual(
             val yNorm = (dy / radius).coerceIn(-1f, 1f)
             val zNorm = kotlin.math.sqrt((1f - xNorm * xNorm - yNorm * yNorm).coerceAtLeast(0f))
 
-            // Realistic 3D terminator calculation supporting waxing (lit right) & waning (lit left)
+            // Realistic 3D spherical terminator
             val sunSign = if (isWaxing) 1f else -1f
             val phaseAngle = (illuminationPercent / 100f) * PI.toFloat()
             val sunX = sunSign * kotlin.math.cos(PI.toFloat() - phaseAngle)
             val sunZ = kotlin.math.sin(PI.toFloat() - phaseAngle)
             val directDot = (xNorm * sunX + zNorm * sunZ)
-            val isLit = directDot > -0.03f
-            val intensity = ((directDot + 0.03f) / 1.03f).coerceIn(0f, 1f)
-
-            // Lunar Maria: Mare Tranquillitatis, Oceanus Procellarum, Mare Imbrium
-            val mariaNoise = (kotlin.math.sin(c * 0.52f + 1.1f) * kotlin.math.cos(r * 0.48f - 0.7f)) +
-              (kotlin.math.sin(c * 0.32f) * 0.28f)
-            val isMaria = mariaNoise > 0.25f && dist < (radius * 0.88f)
-
-            // Craters: Tycho (south with rays), Copernicus (mid-northwest), Kepler
-            val isTycho = (c in 10..12 && r in 17..19)
-            val isTychoRay = (r >= 14 && kotlin.math.abs(c - 11 - (r - 18) * 0.6f) < 0.6f) ||
-              (r >= 14 && kotlin.math.abs(c - 11 + (r - 18) * 0.7f) < 0.6f)
-            val isCopernicus = (c in 7..9 && r in 9..11)
-            val isKepler = (c in 4..6 && r in 11..12)
-
-            val isCraterRim = (c == 11 && r == 17) || (c == 8 && r == 9) || (c == 15 && r == 7) || (c == 5 && r == 11)
-            val isCraterPit = (c == 11 && r == 18) || (c == 8 && r == 10) || (c == 15 && r == 8) || (c == 5 && r == 12)
+            val isLit = directDot > 0f
 
             var cellColor = if (isLit) {
-              val baseLit = lerp(moonMid, moonBright, intensity)
-              when {
-                isCraterRim -> moonPureWhite
-                isCraterPit -> lerp(moonMare, moonDeepDark, 0.6f)
-                isTycho || isTychoRay -> lerp(baseLit, moonPureWhite, 0.45f)
-                isCopernicus -> lerp(baseLit, moonMareDark, 0.35f)
-                isKepler -> lerp(baseLit, moonPureWhite, 0.3f)
-                isMaria -> lerp(baseLit, moonMare, 0.55f)
-                else -> baseLit
-              }
+              val intensity = directDot.coerceIn(0f, 1f)
+              lerp(moonMid, moonBright, intensity)
             } else {
-              // Dark side with gentle earthshine
-              when {
-                isMaria -> moonDeepDark
-                isCraterPit -> Color.Black
-                else -> moonShadow.copy(alpha = 0.82f)
-              }
+              moonShadow.copy(alpha = 0.85f)
             }
 
             // Specular solar limb highlight
-            if (isLit && dist > radius * 0.84f && directDot > 0.35f) {
+            if (isLit && dist > radius * 0.82f && directDot > 0.35f) {
               cellColor = lerp(cellColor, moonPureWhite, 0.65f)
             }
 
@@ -1470,7 +1439,7 @@ fun BlockyMoonPhaseVisual(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          text = phaseName.uppercase(),
+          text = phaseName,
           style = MaterialTheme.typography.titleSmall.copy(
             fontFamily = SilkscreenFontFamily,
             fontSize = 12.sp,
@@ -1492,7 +1461,7 @@ fun BlockyMoonPhaseVisual(
       }
 
       Text(
-        text = "DAY $lunarAgeDays OF 29.5D · SYNODIC CYCLE",
+        text = "Day $lunarAgeDays of 29.5d · Synodic Cycle",
         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
         color = tokens.inkMuted,
         maxLines = 1,
@@ -1515,13 +1484,13 @@ fun BlockyMoonPhaseVisual(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "NEXT: $nextPhaseName",
+          text = "Next: $nextPhaseName",
           style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
           color = tokens.inkSecondary,
           maxLines = 1
         )
         Text(
-          text = "IN ${daysToNextPhase}D",
+          text = "In ${daysToNextPhase}d",
           style = MaterialTheme.typography.labelSmall.copy(
             fontFamily = SilkscreenFontFamily,
             fontSize = 9.sp,
@@ -1702,7 +1671,7 @@ fun BlockyDayMiniReport(
       }
       Box(modifier = Modifier.weight(1f)) {
         MiniTelemetryCard(
-          label = com.example.util.LocalizedStrings.labelPrecipitation(lang),
+          label = com.example.util.LocalizedStrings.labelPrecipShort(lang),
           value = "${day.precipProbMaxPercent}%",
           subValue = if (day.precipProbMaxPercent >= 50) "CHANCE" else "LOW",
           icon = BlockyMetricIcon.PRECIPITATION,
@@ -1712,7 +1681,7 @@ fun BlockyDayMiniReport(
       Box(modifier = Modifier.weight(1f)) {
         val uvVal = day.uvMax.roundToInt()
         MiniTelemetryCard(
-          label = com.example.util.LocalizedStrings.labelUvPeak(lang),
+          label = com.example.util.LocalizedStrings.labelUvShort(lang),
           value = "$uvVal",
           subValue = when {
             uvVal >= 8 -> "VERY HIGH"
@@ -1726,7 +1695,7 @@ fun BlockyDayMiniReport(
       }
       Box(modifier = Modifier.weight(1f)) {
         MiniTelemetryCard(
-          label = com.example.util.LocalizedStrings.labelStability(lang),
+          label = com.example.util.LocalizedStrings.labelSwingShort(lang),
           value = "${swing}°",
           subValue = if (swing <= 8) "STABLE" else "DYNAMIC",
           icon = BlockyMetricIcon.PRESSURE,
@@ -1750,39 +1719,47 @@ private fun MiniTelemetryCard(
       .fillMaxWidth()
       .border(1.dp, tokens.gridBorder)
       .background(tokens.surfaceTranslucent)
-      .padding(horizontal = 6.dp, vertical = 7.dp),
+      .padding(horizontal = 4.dp, vertical = 6.dp),
     verticalArrangement = Arrangement.spacedBy(2.dp)
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(3.dp)
+      horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-      BlockySmallIcon(kind = icon, tint = tokens.accentPrimary, size = 11.dp)
+      BlockySmallIcon(kind = icon, tint = tokens.accentPrimary, size = 10.dp)
       Text(
         text = label,
-        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontSize = 7.5.sp,
+          fontFamily = SilkscreenFontFamily,
+          fontWeight = FontWeight.Bold
+        ),
         color = tokens.inkMuted,
-        maxLines = 1
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis
       )
     }
     Text(
       text = value,
       style = MaterialTheme.typography.labelMedium.copy(
         fontWeight = FontWeight.Bold,
-        fontSize = 11.sp
+        fontSize = 10.5.sp
       ),
       color = tokens.inkPrimary,
-      maxLines = 1
+      maxLines = 1,
+      softWrap = false
     )
     if (subValue != null) {
       Text(
         text = subValue,
         style = MaterialTheme.typography.labelSmall.copy(
-          fontSize = 7.5.sp,
+          fontSize = 7.sp,
           fontFamily = SilkscreenFontFamily
         ),
         color = tokens.accentPrimary,
-        maxLines = 1
+        maxLines = 1,
+        softWrap = false
       )
     }
   }

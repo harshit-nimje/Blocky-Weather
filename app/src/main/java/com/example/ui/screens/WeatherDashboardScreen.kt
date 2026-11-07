@@ -723,11 +723,10 @@ private fun HeroArchitecturalSection(
   onCycleQuip: () -> Unit,
 ) {
   val tokens = LocalGridcastTokens.current
-  val selectedHour = selectedHourIndex?.let { forecast.hourly.getOrNull(it) }
 
-  val displayTempC = selectedHour?.tempC ?: forecast.currentTempC
+  val displayTempC = forecast.currentTempC
   val displayTempInt = displayTempC.toDisplayTemp(useFahrenheit)
-  val displayCondition = selectedHour?.condition ?: forecast.condition
+  val displayCondition = forecast.condition
 
   val todayDaily = forecast.daily.firstOrNull()
   val todayHighC = todayDaily?.tempMaxC ?: forecast.currentTempC
@@ -738,15 +737,15 @@ private fun HeroArchitecturalSection(
   val unitLabel = if (useFahrenheit) "F" else "C"
 
   val displayConditionLabel = LocalizedStrings.conditionLabel(
-    selectedHour?.condition?.displayTitle ?: forecast.conditionLabel,
+    forecast.conditionLabel,
     lang
   )
 
   val weatherQuip =
-    remember(forecast, selectedHourIndex, onlineFunFact, quipCycleOffset, lang) {
+    remember(forecast, onlineFunFact, quipCycleOffset, lang) {
       WeatherQuipEngine.selectActiveQuip(
         forecast = forecast,
-        selectedHourIndex = selectedHourIndex,
+        selectedHourIndex = null,
         onlineFunFact = onlineFunFact,
         quipCycleOffset = quipCycleOffset,
         lang = lang
@@ -781,12 +780,7 @@ private fun HeroArchitecturalSection(
               animated = !ecoMode,
             )
             Text(
-              text =
-                if (selectedHour != null) {
-                  "${selectedHour.hourLabel} · $displayConditionLabel"
-                } else {
-                  displayConditionLabel
-                },
+              text = displayConditionLabel,
               style =
                 MaterialTheme.typography.labelLarge.copy(
                   fontFamily = SilkscreenFontFamily,
@@ -879,21 +873,10 @@ private fun HeroArchitecturalSection(
       val windLabel = LocalizedStrings.labelWind(lang)
       val humLabel = LocalizedStrings.labelHumidityShort(lang)
       
-      val previewLabel = LocalizedStrings.labelPreviewMode(lang)
-      val resetLabel = LocalizedStrings.labelResetToLive(lang)
-
       Text(
-        text =
-          if (selectedHour != null) {
-            "$previewLabel ${selectedHour.hourLabel} · $resetLabel"
-          } else {
-            "$feelsLabel $feelsTemp° · $windLabel ${forecast.windSpeedKmh.roundToInt()} KM/H ${forecast.windDirectionDeg.toCompassCardinal()} · $humLabel ${forecast.humidityPercent}%$aqiSegment"
-          },
+        text = "$feelsLabel $feelsTemp° · $windLabel ${forecast.windSpeedKmh.roundToInt()} KM/H ${forecast.windDirectionDeg.toCompassCardinal()} · $humLabel ${forecast.humidityPercent}%$aqiSegment",
         style = MaterialTheme.typography.labelSmall,
         color = tokens.inkMuted,
-        modifier =
-          if (selectedHour != null) Modifier.clickable(onClick = onClearSelectedHour)
-          else Modifier,
       )
     }
   }
@@ -921,7 +904,7 @@ private fun HourlyBlockTimelineSection(
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       itemsIndexed(hourly) { idx, point ->
-        val isSelected = selectedHourIndex == idx || (selectedHourIndex == null && idx == 0)
+        val isSelected = selectedHourIndex == idx
         val swatch = tokens.blockSwatches[idx % tokens.blockSwatches.size]
 
         BlockyEnterReveal(index = idx.coerceAtMost(6)) {
@@ -1892,42 +1875,81 @@ private fun WeeklyArchitecturalReportSection(
                   }
                 }
 
-                BlockyWeatherIcon(
-                  condition = day.condition,
-                  size = 22.dp,
-                  animated = false,
-                )
-
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                  Text(
-                    text = "${day.tempMinC.toDisplayTemp(useFahrenheit)}°",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.inkMuted,
-                  )
-                  PixelThermalRangeBar(
-                    dayMinC = day.tempMinC,
-                    dayMaxC = day.tempMaxC,
-                    weekMinC = weekMinC,
-                    weekMaxC = weekMaxC,
-                    isExpanded = isExpanded,
-                    modifier = Modifier.width(64.dp).height(9.dp),
-                  )
-                  Text(
-                    text = "${day.tempMaxC.toDisplayTemp(useFahrenheit)}°",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = tokens.inkPrimary,
-                  )
-                  Icon(
-                    imageVector =
-                      if (isExpanded) Icons.Filled.KeyboardArrowUp
-                      else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = tokens.inkMuted,
-                    modifier = Modifier.size(16.dp),
-                  )
+                androidx.compose.animation.AnimatedContent(
+                  targetState = isExpanded,
+                  label = "daily_card_header_transition",
+                ) { expanded ->
+                  if (!expanded) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                      BlockyWeatherIcon(
+                        condition = day.condition,
+                        size = 22.dp,
+                        animated = false,
+                      )
+                      Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                        Text(
+                          text = "${day.tempMinC.toDisplayTemp(useFahrenheit)}°",
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = tokens.inkMuted,
+                        )
+                        PixelThermalRangeBar(
+                          dayMinC = day.tempMinC,
+                          dayMaxC = day.tempMaxC,
+                          weekMinC = weekMinC,
+                          weekMaxC = weekMaxC,
+                          isExpanded = false,
+                          modifier = Modifier.width(64.dp).height(9.dp),
+                        )
+                        Text(
+                          text = "${day.tempMaxC.toDisplayTemp(useFahrenheit)}°",
+                          style = MaterialTheme.typography.titleMedium,
+                          color = tokens.inkPrimary,
+                        )
+                        Icon(
+                          imageVector = Icons.Filled.KeyboardArrowDown,
+                          contentDescription = null,
+                          tint = tokens.inkMuted,
+                          modifier = Modifier.size(16.dp),
+                        )
+                      }
+                    }
+                  } else {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                      Box(
+                        modifier = Modifier
+                          .border(1.dp, tokens.accentPrimary.copy(alpha = 0.55f))
+                          .background(tokens.accentSoftFill)
+                          .padding(horizontal = 8.dp, vertical = 3.dp)
+                      ) {
+                        Text(
+                          text = LocalizedStrings.conditionLabel(day.condition.displayTitle, lang),
+                          style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = SilkscreenFontFamily,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                          ),
+                          color = tokens.accentPrimary,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis,
+                        )
+                      }
+                      Icon(
+                        imageVector = Icons.Filled.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = tokens.accentPrimary,
+                        modifier = Modifier.size(16.dp),
+                      )
+                    }
+                  }
                 }
               }
 

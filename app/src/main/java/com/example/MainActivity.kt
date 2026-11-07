@@ -79,18 +79,17 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
   val useSolarDayNightTheme = uiState.settings.useSolarDayNightTheme
   val refreshRateMode = uiState.settings.refreshRateMode
 
-  val selectedHour = uiState.selectedHourIndex?.let { uiState.forecast?.hourly?.getOrNull(it) }
-  val activeCondition =
-    selectedHour?.condition ?: uiState.forecast?.condition ?: WeatherConditionType.PARTLY_CLOUDY
-  val activePrecipMm = selectedHour?.precipMm ?: uiState.forecast?.precipitationMm ?: 0.0
-  val activePrecipProb =
-    selectedHour?.precipProbPercent ?: uiState.forecast?.hourly?.firstOrNull()?.precipProbPercent ?: 0
-  val activeWindKmh = selectedHour?.windSpeedKmh ?: uiState.forecast?.windSpeedKmh ?: 0.0
-  val activeIsDay = selectedHour?.isDay ?: uiState.forecast?.isDay ?: true
+  val liveCondition =
+    uiState.forecast?.condition ?: WeatherConditionType.PARTLY_CLOUDY
+  val livePrecipMm = uiState.forecast?.precipitationMm ?: 0.0
+  val livePrecipProb =
+    uiState.forecast?.hourly?.firstOrNull()?.precipProbPercent ?: 0
+  val liveWindKmh = uiState.forecast?.windSpeedKmh ?: 0.0
+  val liveIsDay = uiState.forecast?.isDay ?: true
 
   val effectiveDarkMode =
     if (useSolarDayNightTheme) {
-      !activeIsDay
+      !liveIsDay
     } else {
       isDarkMode
     }
@@ -270,23 +269,23 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
   }
 
   LaunchedEffect(
-    activeCondition,
-    activePrecipMm,
-    activePrecipProb,
-    activeWindKmh,
-    activeIsDay,
+    liveCondition,
+    livePrecipMm,
+    livePrecipProb,
+    liveWindKmh,
+    liveIsDay,
     effectiveDarkMode,
     effectiveEcoMode,
     uiState.settings.reduceAnimations,
   ) {
     gridController.updateWeatherState(
-      condition = activeCondition,
+      condition = liveCondition,
       isDarkMode = effectiveDarkMode,
       ecoMode = effectiveEcoMode,
-      precipitationMm = activePrecipMm,
-      precipProbPercent = activePrecipProb,
-      windSpeedKmh = activeWindKmh,
-      isDay = activeIsDay,
+      precipitationMm = livePrecipMm,
+      precipProbPercent = livePrecipProb,
+      windSpeedKmh = liveWindKmh,
+      isDay = liveIsDay,
       reduceAnimations = uiState.settings.reduceAnimations,
     )
   }
@@ -304,7 +303,7 @@ private fun GridcastRoot(viewModel: WeatherViewModel) {
 
   GridcastTheme(
     darkTheme = effectiveDarkMode,
-    weatherCondition = activeCondition,
+    weatherCondition = liveCondition,
     useDynamicTheme = useDynamicTheme,
   ) {
     val activeAccent = LocalGridcastTokens.current.accentPrimary
