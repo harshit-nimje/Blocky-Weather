@@ -110,11 +110,10 @@ fun BlockySevereAlertOverlay(
               .padding(12.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          // Top Matrix Badge Row
-          Row(
+          // Top Matrix Badge & Cause Category Stack
+          Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
           ) {
             Row(
               verticalAlignment = Alignment.CenterVertically,
@@ -134,6 +133,9 @@ fun BlockySevereAlertOverlay(
                     fontWeight = FontWeight.Bold,
                   ),
                 color = alertColor,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
               )
             }
 
@@ -141,12 +143,19 @@ fun BlockySevereAlertOverlay(
               modifier =
                 Modifier.border(1.dp, alertColor.copy(alpha = 0.60f))
                   .background(alertColor.copy(alpha = 0.15f))
-                  .padding(horizontal = 6.dp, vertical = 2.dp)
+                  .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
               Text(
-                text = alert.category,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                text = "HAZARD CAUSE: ${alert.category}",
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontFamily = SilkscreenFontFamily,
+                  fontSize = 9.sp,
+                  fontWeight = FontWeight.Bold,
+                ),
                 color = alertColor,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
               )
             }
           }
@@ -164,7 +173,7 @@ fun BlockySevereAlertOverlay(
               color = tokens.inkPrimary,
             )
 
-            BlockyWordStaggerText(
+            Text(
               text = alert.description,
               style =
                 MaterialTheme.typography.bodyMedium.copy(

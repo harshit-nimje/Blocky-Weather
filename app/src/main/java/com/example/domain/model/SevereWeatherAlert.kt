@@ -29,7 +29,7 @@ object SevereWeatherAlertEngine {
           id = "thunderstorm_${forecast.locationId}",
           title = "THUNDERSTORM & LIGHTNING HAZARD",
           category = "ELECTRICAL STORM",
-          description = "*Thunder Crackles* Convective electrical storm active. Avoid tall trees and open areas!",
+          description = "Convective electrical storm active. Avoid open fields, tall structures, and metallic objects.",
           severity = AlertSeverity.CRITICAL,
           metricTag = "metric_precip",
         )
@@ -43,7 +43,7 @@ object SevereWeatherAlertEngine {
           id = "heavy_rain_${forecast.locationId}",
           title = "HEAVY DOWNPOUR & FLOOD RISK",
           category = "PRECIPITATION",
-          description = "Rain gonna fill up to your ankles today. Harvest some rain water dude!",
+          description = "Heavy downpour active with high accumulation. Localized surface flooding and reduced road visibility expected.",
           severity = AlertSeverity.WARNING,
           metricTag = "metric_precip",
         )
@@ -57,7 +57,7 @@ object SevereWeatherAlertEngine {
           id = "high_wind_${forecast.locationId}",
           title = "GALE FORCE WIND GUSTS",
           category = "WIND SPEEDS",
-          description = "Peak gusts reaching ${forecast.windGustsKmh.toInt()} km/h. Secure loose outdoor objects!",
+          description = "Peak gusts reaching ${forecast.windGustsKmh.toInt()} km/h. High wind hazard — secure loose outdoor objects and exercise driving caution.",
           severity = AlertSeverity.WARNING,
           metricTag = "metric_wind",
         )
@@ -71,7 +71,7 @@ object SevereWeatherAlertEngine {
           id = "extreme_uv_${forecast.locationId}",
           title = "EXTREME UV RADIATION HAZARD",
           category = "SOLAR RADIATION",
-          description = "UV Index at ${String.format(Locale.US, "%.1f", forecast.uvIndex)}. Skin burn alert — use high quality >SPF 50 sunscreen!",
+          description = "UV Index at ${String.format(Locale.US, "%.1f", forecast.uvIndex)}. Severe sunburn hazard — apply broad-spectrum >SPF 50 sunscreen and seek shade.",
           severity = AlertSeverity.WARNING,
           metricTag = "metric_uv",
         )
@@ -86,7 +86,7 @@ object SevereWeatherAlertEngine {
           id = "hazardous_aqi_${forecast.locationId}",
           title = "HAZARDOUS AIR QUALITY (AQI $aqi)",
           category = "POLLUTION",
-          description = "Honey, where is my mask? Lungs are gonna complain today!",
+          description = "Air Quality Index at $aqi. Elevated particulate pollution — wear an N95 mask outdoors and run indoor air filtration.",
           severity = if (aqi >= 200) AlertSeverity.CRITICAL else AlertSeverity.WARNING,
           metricTag = "metric_aqi",
         )
@@ -100,7 +100,7 @@ object SevereWeatherAlertEngine {
           id = "extreme_heat_${forecast.locationId}",
           title = "EXTREME HEATWAVE WARNING",
           category = "TEMPERATURE",
-          description = "Basically a nuclear fusion outside (${forecast.currentTempC.toInt()}°C). Sweating buckets — stay inside with AC!",
+          description = "Dangerous extreme heat level (${forecast.currentTempC.toInt()}°C). High heat stress hazard — stay hydrated and remain in air-conditioned spaces.",
           severity = AlertSeverity.CRITICAL,
           metricTag = "metric_real_feel",
         )
@@ -114,7 +114,7 @@ object SevereWeatherAlertEngine {
           id = "freezing_chill_${forecast.locationId}",
           title = "FREEZING CHILL & ICE ALERT",
           category = "TEMPERATURE",
-          description = "brrrrr, so coldddd (${forecast.currentTempC.toInt()}°C). Stay wrapped up in blankies!",
+          description = "Freezing sub-zero temperatures (${forecast.currentTempC.toInt()}°C). Black ice and frostbite risk — wear insulated thermal gear.",
           severity = AlertSeverity.WARNING,
           metricTag = "metric_real_feel",
         )
