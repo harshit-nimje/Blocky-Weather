@@ -1897,7 +1897,7 @@ fun BlockyWeeklyTrendVisual(
       val dayLabel = try {
         val sdf = java.text.SimpleDateFormat("E", Locale.US)
         val date = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(day.dateIso)
-        sdf.format(date).take(1).uppercase()
+        date?.let { sdf.format(it).take(1).uppercase() } ?: "?"
       } catch (e: Exception) { "?" }
 
       Box(

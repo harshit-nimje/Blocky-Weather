@@ -164,3 +164,9 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+// Disable KSP processing on unit tests where no code generation is required,
+// preventing IntelliJ AWT EventQueue NullPointerException in headless CI runners.
+tasks.matching { it.name.startsWith("ksp") && it.name.contains("UnitTest") }.configureEach {
+  enabled = false
+}

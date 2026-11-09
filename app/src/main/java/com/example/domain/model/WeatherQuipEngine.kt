@@ -114,16 +114,23 @@ object WeatherQuipEngine {
 
     if ((usAqi != null && usAqi >= 90) || (pm25 != null && pm25 >= 30.0)) {
       prioritySpecific.add(LocalizedStrings.quipCough(lang))
+      prioritySpecific.add("Honey, where is my mask?")
+      prioritySpecific.add("Lungs are gonna complain today.")
       prioritySpecific.add("Air quality: extra crunchy in ${forecast.cityName} today.")
-      prioritySpecific.add("Mask up—lungs are gonna complain today.")
     }
 
     if ((effectiveApparentC >= 35.0 && (tempC >= 31.0 || dewPointC >= 22.0)) || tempC >= 38.0) {
       prioritySpecific.add(LocalizedStrings.quipNuclearFusion(lang))
+      prioritySpecific.add("Basically a nuclear fusion outside. stay in.")
+      prioritySpecific.add("Dont go out barefeet today.")
+      prioritySpecific.add("sweating buckets huh?")
+      prioritySpecific.add("Sleep with AC on.")
+      prioritySpecific.add("Cooked.")
+      prioritySpecific.add("drink water before you turn into a raisin bro.")
       prioritySpecific.add("The sun is on a personal vengeance arc today.")
-      prioritySpecific.add("Drink water before you turn into a raisin.")
     } else if (tempC >= 25.0 || (isDay && condition == WeatherConditionType.CLEAR_DAY)) {
       prioritySpecific.add(LocalizedStrings.quipIceCream(lang))
+      prioritySpecific.add("I crave icecream")
       if (isDay && tempC >= 28.5) {
         prioritySpecific.add("Car seatbelt buckle temperature: critical hazard.")
         prioritySpecific.add("Stepped outside for 2 seconds, character development complete.")
@@ -131,16 +138,23 @@ object WeatherQuipEngine {
     }
 
     if (isDay && uvIndex >= 5.0) {
-      prioritySpecific.add("Use high quality >SPF 50 sunscreen—don't cut corners there!")
-      prioritySpecific.add("Sunscreen now or tomato cosplay later, your call.")
+      prioritySpecific.add("skin burn alert!")
+      prioritySpecific.add("use high quality >SPF 50 sunscreen, dont save money there!")
+      prioritySpecific.add("sunscreen now or tomato cosplay later, your call.")
+    }
+
+    if (cloudCover >= 70 && !isRainingNow) {
+      prioritySpecific.add("Bro, see the stars today. ps. You can't.")
+      prioritySpecific.add("Bit sad today.")
     }
 
     if (isRainingNow || upcomingPrecipPeak >= 45) {
       prioritySpecific.add(LocalizedStrings.quipUmbrella(lang))
+      prioritySpecific.add("carry umbrellas, you are welcome")
       when (condition) {
         WeatherConditionType.THUNDERSTORM -> {
-          prioritySpecific.add("*Thunder Crackles* Thor is practicing drums overhead.")
-          prioritySpecific.add("Sky is taking flash photography without permission.")
+          prioritySpecific.add("sky is taking flash photography without permission.")
+          prioritySpecific.add("thor is aggressively practicing drums overhead.")
         }
         WeatherConditionType.HEAVY_RAIN -> {
           prioritySpecific.add("Raining cats and dogs—socks are in grave danger.")
@@ -154,11 +168,16 @@ object WeatherQuipEngine {
     }
 
     if (tempC <= 16.0 || isRainingNow || humidity >= 70) {
+      if (tempC <= 15.0 && humidity >= 70) {
+        prioritySpecific.add("Chilly and damp at ${tempC.roundToInt()}°")
+      }
       prioritySpecific.add(LocalizedStrings.quipTea(lang))
+      prioritySpecific.add("A cup of tea wont hurt nobody.")
+      prioritySpecific.add("wrapped up in blankies.")
     }
 
     if (tempC <= 10.0 && !isRainingNow) {
-      prioritySpecific.add("Brrrrr, so cold! Certified hoodie weather.")
+      prioritySpecific.add("brrrrr, so coldddd.")
       if (tempC <= 2.0) {
         prioritySpecific.add("Why do we live where the air hurts our face?")
         prioritySpecific.add("Leaving bed today requires heroic bravery.")
@@ -166,24 +185,29 @@ object WeatherQuipEngine {
     }
 
     if (windKmh >= 24.0 || forecast.windGustsKmh >= 38.0) {
+      prioritySpecific.add("umbrella flip hazard: 100%. dont even try it.")
       prioritySpecific.add("Walking against the wind = surprise leg day.")
       prioritySpecific.add("Nature's free blow-dry. Messy hair unlocked.")
-      if (forecast.windGustsKmh >= 48.0) {
-        prioritySpecific.add("Umbrella flip hazard: 100%. Don't even try it.")
-      }
+    }
+
+    if (condition == WeatherConditionType.FOG || visibilityM <= 2000.0) {
+      prioritySpecific.add("render distance set to 2 chunks.")
     }
 
     if (todaySwingC >= 11.0 || locationTypicalSwingC >= 11.0) {
-      prioritySpecific.add("Classic ${forecast.cityName} swing: ${todayMinC.roundToInt()}° to ${todayMaxC.roundToInt()}°. 3 seasons in one day.")
+      val swingVal = if (todaySwingC >= 11.0) todaySwingC.roundToInt() else locationTypicalSwingC.roundToInt()
+      prioritySpecific.add("${swingVal}° swing today. Classic ${forecast.cityName}: 3 seasons in one day.")
     }
 
     if (!isDay && cloudCover <= 30 && visibilityM >= 8000.0 && (usAqi == null || usAqi <= 60)) {
-      prioritySpecific.add("Look up, the stars are pretty tonight.")
+      prioritySpecific.add("Look up, the stars are pretty")
       prioritySpecific.add("The moon is carrying the entire sky aesthetic.")
     }
 
     if (tempC in 18.0..25.0 && effectiveApparentC in 17.5..25.5 && precipMm == 0.0 && windKmh <= 24.0) {
-      prioritySpecific.add("Earth, as intended. Pleasantest weather.")
+      prioritySpecific.add("bro take a stroll, breeze is goated.")
+      prioritySpecific.add("pleasantest weather.")
+      prioritySpecific.add("Earth, as intended")
       prioritySpecific.add("No jacket, no sweat, no complaints. Rare W for ${forecast.cityName}.")
       prioritySpecific.add("Weather so good it feels suspicious.")
     }
@@ -191,7 +215,7 @@ object WeatherQuipEngine {
     // Group 2: Meteorological Fun Facts
     val factIdx = abs(forecast.cityName.hashCode() + tempC.roundToInt() + seedOffset) % fallbackMeteorologyFacts.size
     val chosenFact = onlineFunFact?.takeIf { it.isNotBlank() } ?: fallbackMeteorologyFacts[factIdx]
-    val funFactLine = "Fun fact: $chosenFact"
+    val funFactLine = "fun fact: $chosenFact"
 
     // Group 3: Humorous and quirky remarks that smartly reference the weather
     val generalQuirks = listOf(
@@ -200,6 +224,7 @@ object WeatherQuipEngine {
       "Weather forecast: 100% chance of things happening.",
       "Are you opening this app just to read what I wrote? Awww <3",
       LocalizedStrings.quipHello(lang),
+      "Hello :)",
       "Manifesting a clear sky for you. Results may vary.",
       "Current mood: mostly cloudy with a chance of snacks.",
       "Barometer: checking pressure. Me: also under pressure.",
@@ -207,32 +232,39 @@ object WeatherQuipEngine {
     )
 
     // Blend smartly:
-    // If we have acute conditions, rotate them by city seed so different cities have a distinct
-    // starting acute observation, but ALWAYS starting with acute conditions!
+    // Lead with the #1 acute condition, then vary remaining acute, facts, and quirks by citySeed + seedOffset
     val result = LinkedHashSet<String>()
     val citySeed = abs(forecast.cityName.hashCode() + (todayMinC * 10).roundToInt() + (tempC * 5).roundToInt())
 
     if (prioritySpecific.isNotEmpty()) {
-      val rotateOffset = citySeed % prioritySpecific.size
-      val rotatedSpecific = prioritySpecific.drop(rotateOffset) + prioritySpecific.take(rotateOffset)
-      
-      // First 2: Genuine acute condition matches for this specific location
-      rotatedSpecific.take(2).forEach { result.add(it) }
-      // Then fun fact
+      // Primary #1 acute quip always leads first
+      result.add(prioritySpecific.first())
+
+      // Remaining acute conditions diversified by city seed and cycle offset
+      val remainingAcute = prioritySpecific.drop(1)
+      if (remainingAcute.isNotEmpty()) {
+        val shift = abs(citySeed + seedOffset) % remainingAcute.size
+        val rotatedAcute = remainingAcute.drop(shift) + remainingAcute.take(shift)
+        rotatedAcute.forEach { result.add(it) }
+      }
+
+      // Fun fact
       result.add(funFactLine)
-      // Then remaining acute conditions
-      rotatedSpecific.drop(2).forEach { result.add(it) }
-      // Then quirky remarks
-      val quirkRotate = (citySeed / 3) % generalQuirks.size
-      val rotatedQuirks = generalQuirks.drop(quirkRotate) + generalQuirks.take(quirkRotate)
+
+      // Quirks diversified by city seed and cycle offset
+      val quirkShift = abs(citySeed / 3 + seedOffset) % generalQuirks.size
+      val rotatedQuirks = generalQuirks.drop(quirkShift) + generalQuirks.take(quirkShift)
       rotatedQuirks.forEach { result.add(it) }
     } else {
       // Mild baseline weather: Lead with pleasant/mild quips, then fun fact, then quirks
       result.add(LocalizedStrings.quipHello(lang))
-      result.add("Earth, as intended. Pleasantest weather.")
+      result.add("Hello :)")
+      result.add("bro take a stroll, breeze is goated.")
+      result.add("pleasantest weather.")
+      result.add("Earth, as intended")
       result.add(funFactLine)
-      val quirkRotate = citySeed % generalQuirks.size
-      val rotatedQuirks = generalQuirks.drop(quirkRotate) + generalQuirks.take(quirkRotate)
+      val quirkShift = abs(citySeed + seedOffset) % generalQuirks.size
+      val rotatedQuirks = generalQuirks.drop(quirkShift) + generalQuirks.take(quirkShift)
       rotatedQuirks.forEach { result.add(it) }
     }
 
